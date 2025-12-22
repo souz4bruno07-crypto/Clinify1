@@ -1,0 +1,5 @@
+{
+  "name": "Clinify",
+  "description": "A financial SaaS for aesthetic clinics with Supabase authentication and data management.",
+  "requestFramePermissions": []
+}
