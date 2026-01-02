@@ -1,0 +1,22 @@
+# Clinify - Robots.txt
+
+User-agent: *
+Allow: /
+
+# Bloquear áreas privadas e sensíveis
+Disallow: /dashboard/
+Disallow: /onboarding
+Disallow: /api/
+Disallow: /_/
+
+# Sitemap
+Sitemap: https://clinify.app/sitemap.xml
+
+
+
+
+
+
+
+
+

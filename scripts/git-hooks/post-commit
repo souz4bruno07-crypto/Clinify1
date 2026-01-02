@@ -1,0 +1,27 @@
+#!/bin/sh
+#
+# Git Hook: post-commit
+# Registra automaticamente mudanças no código no Jira após cada commit
+#
+# Para ativar este hook:
+# 1. Copie este arquivo para .git/hooks/post-commit
+# 2. Dê permissão de execução: chmod +x .git/hooks/post-commit
+#
+# Ou use o script de setup: npm run jira:setup-hook
+
+# Obter o diretório do projeto (raiz do repositório)
+PROJECT_ROOT=$(git rev-parse --show-toplevel)
+
+# Verificar se o arquivo .env.jira existe
+if [ ! -f "$PROJECT_ROOT/.env.jira" ]; then
+  # Silenciosamente sair se não estiver configurado
+  exit 0
+fi
+
+# Executar registro de mudanças (apenas do último commit)
+cd "$PROJECT_ROOT"
+npm run jira:register-changes HEAD~1 HEAD 2>/dev/null || true
+
+exit 0
+
+

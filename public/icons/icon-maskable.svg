@@ -1,0 +1,44 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <defs>
+    <linearGradient id="bg-gradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#10b981"/>
+      <stop offset="50%" style="stop-color:#059669"/>
+      <stop offset="100%" style="stop-color:#047857"/>
+    </linearGradient>
+  </defs>
+  
+  <!-- Full background (no rounded corners for maskable) -->
+  <rect width="512" height="512" fill="url(#bg-gradient)"/>
+  
+  <!-- Centered content within safe zone (80% center) -->
+  <g transform="translate(51.2, 51.2) scale(0.8)">
+    <!-- Main C letter with medical cross -->
+    <path d="M340 160 
+             C380 160 410 175 430 200
+             L395 240
+             C380 220 355 210 330 210
+             C270 210 220 260 220 330
+             C220 400 270 450 330 450
+             C360 450 385 438 400 415
+             L438 452
+             C415 485 375 510 330 510
+             C235 510 160 435 160 330
+             C160 225 235 160 330 160
+             Z" 
+          fill="white"/>
+    
+    <!-- Small plus/cross accent -->
+    <rect x="380" y="135" width="8" height="40" rx="4" fill="white" opacity="0.9"/>
+    <rect x="365" y="150" width="38" height="8" rx="4" fill="white" opacity="0.9"/>
+  </g>
+</svg>
+
+
+
+
+
+
+
+
+
+

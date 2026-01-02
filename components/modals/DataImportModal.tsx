@@ -1,9 +1,11 @@
-import React, { useState, useRef, useCallback } from 'react';
+import React, { useState, useRef, useCallback, useEffect } from 'react';
 import * as XLSX from 'xlsx';
 import { Transaction } from '../../types';
 import { UploadCloud, X, AlertTriangle, CheckCircle2, FileSpreadsheet, ArrowRight, Loader2, Ban, Download } from 'lucide-react';
 import { formatCurrency } from '../../utils/formatters';
-import { addTransactions } from '../../services/supabaseService';
+import { addTransactions } from '../../services/backendService';
+import { useToast } from '../../contexts/ToastContext';
+import { useFocusTrap } from '../../hooks/useFocusTrap';
 
 interface DataImportModalProps {
   isOpen: boolean;
@@ -21,11 +23,37 @@ interface PreviewData extends Partial<Transaction> {
 }
 
 const DataImportModal: React.FC<DataImportModalProps> = ({ isOpen, onClose, userId, onSuccess }) => {
+  const toast = useToast();
+  const modalRef = useFocusTrap(isOpen);
+  const previousActiveElementRef = useRef<HTMLElement | null>(null);
   const [step, setStep] = useState<ImportStep>('upload');
   const [previewData, setPreviewData] = useState<PreviewData[]>([]);
   const [stats, setStats] = useState({ total: 0, valid: 0, invalid: 0, revenue: 0, expense: 0 });
   const [progress, setProgress] = useState(0);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Handle ESC key and body scroll
+  useEffect(() => {
+    const handleEsc = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && isOpen && step !== 'processing') {
+        onClose();
+      }
+    };
+    
+    if (isOpen) {
+      previousActiveElementRef.current = document.activeElement as HTMLElement;
+      document.body.style.overflow = 'hidden';
+      document.addEventListener('keydown', handleEsc);
+    }
+    
+    return () => {
+      document.removeEventListener('keydown', handleEsc);
+      document.body.style.overflow = '';
+      if (previousActiveElementRef.current) {
+        previousActiveElementRef.current.focus();
+      }
+    };
+  }, [isOpen, onClose, step]);
 
   // --- HELPER: Parse Excel Date (Serial to JS Date) ---
   const parseExcelDate = (excelDate: any): number | null => {
@@ -68,7 +96,7 @@ const DataImportModal: React.FC<DataImportModalProps> = ({ isOpen, onClose, user
 
       processData(jsonData);
     } catch (error) {
-      alert("Erro ao ler o arquivo. Certifique-se que é um arquivo Excel válido.");
+      toast.error("Erro ao ler o arquivo. Certifique-se que é um arquivo Excel válido.");
     }
   };
 
@@ -196,9 +224,10 @@ const DataImportModal: React.FC<DataImportModalProps> = ({ isOpen, onClose, user
               setProgress(Math.round(((i + 1) / totalBatches) * 100));
           }
           setStep('result');
+          toast.success('Dados importados com sucesso!');
           if (onSuccess) onSuccess();
       } catch (error) {
-          alert("Erro ao importar dados. Verifique sua conexão e tente novamente.");
+          toast.error("Erro ao importar dados. Verifique sua conexão e tente novamente.");
           setStep('preview');
       }
   };
@@ -216,17 +245,25 @@ const DataImportModal: React.FC<DataImportModalProps> = ({ isOpen, onClose, user
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 animate-in fade-in">
-        <div className="bg-white dark:bg-slate-900 w-full max-w-4xl rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
-            
+    <div 
+      className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 animate-in fade-in"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="import-modal-title"
+      aria-describedby="import-modal-description"
+    >
+        <div 
+          ref={modalRef}
+          className="bg-white dark:bg-slate-900 w-full max-w-4xl rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]"
+        >
             {/* Header */}
             <div className="p-6 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center bg-slate-50 dark:bg-slate-800/50">
                 <div>
-                    <h3 className="text-xl font-bold text-slate-900 dark:text-white flex items-center gap-2">
-                        <FileSpreadsheet className="w-6 h-6 text-emerald-600" />
+                    <h3 id="import-modal-title" className="text-xl font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                        <FileSpreadsheet className="w-6 h-6 text-emerald-600" aria-hidden="true" />
                         Importador de Dados
                     </h3>
-                    <p className="text-sm text-slate-500 mt-1">
+                    <p id="import-modal-description" className="text-sm text-slate-500 mt-1">
                         {step === 'upload' && 'Selecione seu arquivo para começar'}
                         {step === 'preview' && 'Revise os dados antes de confirmar'}
                         {step === 'processing' && 'Processando dados...'}
@@ -234,8 +271,12 @@ const DataImportModal: React.FC<DataImportModalProps> = ({ isOpen, onClose, user
                     </p>
                 </div>
                 {step !== 'processing' && (
-                    <button onClick={onClose} className="p-2 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-full transition-colors">
-                        <X className="w-5 h-5 text-slate-500" />
+                    <button 
+                      onClick={onClose} 
+                      className="p-2 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-full transition-colors"
+                      aria-label="Fechar modal"
+                    >
+                        <X className="w-5 h-5 text-slate-500" aria-hidden="true" />
                     </button>
                 )}
             </div>
@@ -248,9 +289,18 @@ const DataImportModal: React.FC<DataImportModalProps> = ({ isOpen, onClose, user
                     <div className="flex-1 flex flex-col items-center justify-center space-y-8 animate-in zoom-in-95 duration-300">
                          <div 
                             onClick={() => fileInputRef.current?.click()}
-                            className="w-full max-w-lg border-2 border-dashed border-slate-300 dark:border-slate-700 rounded-3xl p-12 flex flex-col items-center justify-center cursor-pointer hover:border-emerald-500 hover:bg-emerald-50/30 dark:hover:bg-emerald-900/10 transition-all group"
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter' || e.key === ' ') {
+                                e.preventDefault();
+                                fileInputRef.current?.click();
+                              }
+                            }}
+                            role="button"
+                            tabIndex={0}
+                            aria-label="Área para upload de arquivo. Clique ou pressione Enter para selecionar arquivo"
+                            className="w-full max-w-lg border-2 border-dashed border-slate-300 dark:border-slate-700 rounded-3xl p-12 flex flex-col items-center justify-center cursor-pointer hover:border-emerald-500 hover:bg-emerald-50/30 dark:hover:bg-emerald-900/10 transition-all group focus:outline-none focus:ring-2 focus:ring-emerald-500"
                          >
-                            <div className="w-20 h-20 bg-emerald-100 dark:bg-emerald-900/30 rounded-full flex items-center justify-center mb-6 group-hover:scale-110 transition-transform">
+                            <div className="w-20 h-20 bg-emerald-100 dark:bg-emerald-900/30 rounded-full flex items-center justify-center mb-6 group-hover:scale-110 transition-transform" aria-hidden="true">
                                 <UploadCloud className="w-10 h-10 text-emerald-600" />
                             </div>
                             <h4 className="text-xl font-bold text-slate-900 dark:text-white mb-2">Clique para carregar</h4>
@@ -263,16 +313,27 @@ const DataImportModal: React.FC<DataImportModalProps> = ({ isOpen, onClose, user
                                 accept=".xlsx, .xls, .csv" 
                                 className="hidden" 
                                 onChange={handleFileUpload}
+                                aria-label="Selecionar arquivo para importação"
                             />
-                            <button className="bg-slate-900 dark:bg-white text-white dark:text-slate-900 px-6 py-2.5 rounded-xl text-sm font-bold shadow-lg">
+                            <button 
+                              className="bg-slate-900 dark:bg-white text-white dark:text-slate-900 px-6 py-2.5 rounded-xl text-sm font-bold shadow-lg"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                fileInputRef.current?.click();
+                              }}
+                            >
                                 Selecionar Arquivo
                             </button>
                          </div>
 
                          <div className="text-center">
                              <p className="text-sm text-slate-500 mb-2">Precisa de um modelo?</p>
-                             <button onClick={downloadTemplate} className="text-emerald-600 font-bold hover:underline flex items-center gap-1 mx-auto text-sm">
-                                 <Download className="w-4 h-4" /> Baixar Planilha Modelo
+                             <button 
+                               onClick={downloadTemplate} 
+                               className="text-emerald-600 font-bold hover:underline flex items-center gap-1 mx-auto text-sm"
+                               aria-label="Baixar planilha modelo"
+                             >
+                                 <Download className="w-4 h-4" aria-hidden="true" /> Baixar Planilha Modelo
                              </button>
                          </div>
                     </div>
@@ -356,7 +417,11 @@ const DataImportModal: React.FC<DataImportModalProps> = ({ isOpen, onClose, user
 
                         {/* Actions */}
                         <div className="pt-6 flex justify-between items-center shrink-0">
-                            <button onClick={() => setStep('upload')} className="text-slate-500 font-bold hover:text-slate-700">
+                            <button 
+                              onClick={() => setStep('upload')} 
+                              className="text-slate-500 font-bold hover:text-slate-700"
+                              aria-label="Voltar para seleção de arquivo"
+                            >
                                 Voltar
                             </button>
                             <div className="flex gap-3">
@@ -367,8 +432,9 @@ const DataImportModal: React.FC<DataImportModalProps> = ({ isOpen, onClose, user
                                     onClick={handleConfirmImport}
                                     disabled={stats.valid === 0}
                                     className="bg-emerald-600 text-white px-8 py-2.5 rounded-xl font-bold shadow-lg shadow-emerald-500/20 hover:bg-emerald-700 transition-all flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                                    aria-label={`Confirmar importação de ${stats.valid} registros`}
                                 >
-                                    Confirmar Importação <ArrowRight className="w-4 h-4" />
+                                    Confirmar Importação <ArrowRight className="w-4 h-4" aria-hidden="true" />
                                 </button>
                             </div>
                         </div>
@@ -377,16 +443,17 @@ const DataImportModal: React.FC<DataImportModalProps> = ({ isOpen, onClose, user
 
                 {/* STEP 3: PROCESSING */}
                 {step === 'processing' && (
-                    <div className="flex-1 flex flex-col items-center justify-center space-y-6 animate-in fade-in">
-                        <Loader2 className="w-16 h-16 text-emerald-600 animate-spin" />
+                    <div className="flex-1 flex flex-col items-center justify-center space-y-6 animate-in fade-in" role="status" aria-live="polite" aria-label="Processando importação">
+                        <Loader2 className="w-16 h-16 text-emerald-600 animate-spin" aria-hidden="true" />
                         <div className="w-full max-w-md space-y-2 text-center">
                             <h4 className="text-xl font-bold text-slate-900 dark:text-white">Processando...</h4>
                             <p className="text-slate-500">Estamos inserindo seus dados de forma segura no banco de dados.</p>
                             
-                            <div className="h-4 w-full bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden mt-4">
+                            <div className="h-4 w-full bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden mt-4" role="progressbar" aria-valuenow={progress} aria-valuemin={0} aria-valuemax={100} aria-label={`Progresso da importação: ${progress}%`}>
                                 <div 
                                     className="h-full bg-emerald-500 transition-all duration-300 ease-out"
                                     style={{ width: `${progress}%` }}
+                                    aria-hidden="true"
                                 ></div>
                             </div>
                             <p className="text-xs font-bold text-emerald-600">{progress}%</p>
@@ -396,15 +463,19 @@ const DataImportModal: React.FC<DataImportModalProps> = ({ isOpen, onClose, user
 
                 {/* STEP 4: RESULT */}
                 {step === 'result' && (
-                    <div className="flex-1 flex flex-col items-center justify-center space-y-6 animate-in zoom-in-95">
-                        <div className="w-24 h-24 bg-emerald-100 dark:bg-emerald-900/30 rounded-full flex items-center justify-center mb-2">
+                    <div className="flex-1 flex flex-col items-center justify-center space-y-6 animate-in zoom-in-95" role="status" aria-live="polite">
+                        <div className="w-24 h-24 bg-emerald-100 dark:bg-emerald-900/30 rounded-full flex items-center justify-center mb-2" aria-hidden="true">
                             <CheckCircle2 className="w-12 h-12 text-emerald-600" />
                         </div>
                         <h4 className="text-3xl font-bold text-slate-900 dark:text-white text-center">Sucesso!</h4>
                         <p className="text-slate-500 text-center max-w-sm">
                             Os dados foram validados e importados corretamente para o sistema.
                         </p>
-                        <button onClick={onClose} className="bg-slate-900 dark:bg-white text-white dark:text-slate-900 px-10 py-3 rounded-xl font-bold shadow-lg hover:opacity-90 transition-all">
+                        <button 
+                          onClick={onClose} 
+                          className="bg-slate-900 dark:bg-white text-white dark:text-slate-900 px-10 py-3 rounded-xl font-bold shadow-lg hover:opacity-90 transition-all"
+                          aria-label="Fechar modal de importação"
+                        >
                             Fechar
                         </button>
                     </div>

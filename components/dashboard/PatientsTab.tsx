@@ -1,23 +1,36 @@
 
 import React, { useState, useEffect } from 'react';
-import { getPatients, addPatient, updatePatient, deletePatient } from '../../services/supabaseService';
+import { getPatients, addPatient, updatePatient, deletePatient } from '../../services/backendService';
 import { Patient } from '../../types';
 import { formatCPF, formatPhone } from '../../utils/formatters';
 import { 
   Search, Plus, User, Phone, Mail, X, Trash2, Edit2, Users, 
   Loader2, MapPin, Briefcase, Megaphone, Home, CheckCircle2, 
-  Ruler, Weight, Activity, Calendar 
+  Ruler, Weight, Activity, Calendar, Gift, Eye
 } from 'lucide-react';
+import EmptyState from '../ui/EmptyState';
+import { SkeletonPatientsTable } from '../ui/Skeleton';
+import { useToast } from '../../contexts/ToastContext';
+import { useConfirmDialog } from '../ui/ConfirmDialog';
+import Pagination from '../ui/Pagination';
+import { LoyaltyTab } from './loyalty';
 
 const PatientsTab: React.FC<{ user: any }> = ({ user }) => {
+  const toast = useToast();
+  const { confirm } = useConfirmDialog();
   const [patients, setPatients] = useState<Patient[]>([]);
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(20);
+  const [totalPatients, setTotalPatients] = useState(0);
   
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingPatient, setEditingPatient] = useState<Patient | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [isSearchingCep, setIsSearchingCep] = useState(false);
+  const [viewingPatient, setViewingPatient] = useState<Patient | null>(null);
+  const [viewTab, setViewTab] = useState<'info' | 'loyalty'>('info');
 
   const initialFormData = {
     name: '', phone: '', email: '', cpf: '', birth_date: '',
@@ -32,13 +45,15 @@ const PatientsTab: React.FC<{ user: any }> = ({ user }) => {
   const loadPatients = async () => {
      if (user) {
          setLoading(true);
-         const data = await getPatients(user.id);
-         setPatients(data);
+         const offset = (currentPage - 1) * itemsPerPage;
+         const response = await getPatients(user.id, itemsPerPage, offset);
+         setPatients(response.data);
+         setTotalPatients(response.total);
          setLoading(false);
      }
   };
 
-  useEffect(() => { loadPatients(); }, [user]);
+  useEffect(() => { loadPatients(); }, [user, currentPage, itemsPerPage]);
 
   const handleCepSearch = async (cep: string) => {
     const cleanedCep = cep.replace(/\D/g, '');
@@ -57,13 +72,15 @@ const PatientsTab: React.FC<{ user: any }> = ({ user }) => {
           }));
         }
       } catch (err) {
-        console.error("Erro busca CEP", err);
+        // Erro silencioso - CEP inválido não impede cadastro
       } finally {
         setIsSearchingCep(false);
       }
     }
   };
 
+  // Filtrar pacientes da página atual (busca client-side limitada à página)
+  // Para busca completa, seria necessário implementar busca server-side
   const filtered = patients.filter(p => 
       p.name.toLowerCase().includes(search.toLowerCase()) || 
       p.cpf?.includes(search) || p.phone?.includes(search)
@@ -109,22 +126,34 @@ const PatientsTab: React.FC<{ user: any }> = ({ user }) => {
 
           if (result.data) {
               setIsModalOpen(false);
+              toast.success(editingPatient ? 'Dados atualizados!' : 'Paciente cadastrado com sucesso!', 3000);
               setTimeout(loadPatients, 200);
           } else {
-              alert(`Erro do Banco: ${result.error}`);
+              toast.error(`Erro do Banco: ${result.error}`);
           }
       } catch (error: any) {
-          alert(`Falha crítica: ${error.message}`);
+          toast.error(`Falha crítica: ${error.message}`);
       } finally {
           setIsSaving(false);
       }
   };
 
   const handleDelete = async (id: string) => {
-      if(window.confirm("Deseja excluir este paciente? Esta ação não pode ser desfeita.")) {
+      const confirmed = await confirm({
+          title: 'Excluir Paciente',
+          message: 'Deseja excluir este paciente? Esta ação não pode ser desfeita.',
+          confirmText: 'Excluir',
+          cancelText: 'Cancelar',
+          variant: 'danger'
+      });
+      if (confirmed) {
           const success = await deletePatient(id);
-          if (success) loadPatients();
-          else alert("Não foi possível excluir o paciente.");
+          if (success) {
+              toast.success('Item excluído!', 3000);
+              loadPatients();
+          } else {
+              toast.error('Não foi possível excluir o paciente.');
+          }
       }
   };
 
@@ -135,7 +164,7 @@ const PatientsTab: React.FC<{ user: any }> = ({ user }) => {
               <h2 className="text-3xl font-black text-slate-900 dark:text-white flex items-center gap-3 italic tracking-tighter">
                   <Users className="w-8 h-8 text-emerald-600" /> Base de Pacientes
               </h2>
-              <p className="text-slate-500 font-bold uppercase text-[10px] tracking-widest mt-1">{patients.length} registros ativos</p>
+              <p className="text-slate-500 font-bold uppercase text-[10px] tracking-widest mt-1">{totalPatients} registros ativos</p>
           </div>
           <button onClick={() => openModal()} className="flex items-center gap-2 bg-emerald-600 text-white px-8 py-4 rounded-2xl text-xs font-black uppercase tracking-widest hover:bg-emerald-700 transition-all shadow-xl shadow-emerald-500/20 active:scale-95">
              <Plus className="w-4 h-4" /> Novo Paciente
@@ -168,9 +197,25 @@ const PatientsTab: React.FC<{ user: any }> = ({ user }) => {
                 </thead>
                 <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
                    {loading ? (
-                       <tr><td colSpan={4} className="p-20 text-center"><Loader2 className="w-10 h-10 animate-spin mx-auto text-emerald-500" /></td></tr>
+                       <SkeletonPatientsTable rows={5} />
+                   ) : filtered.length === 0 && search ? (
+                       <tr><td colSpan={4} className="p-8">
+                         <EmptyState 
+                           icon="search" 
+                           title="Nenhum resultado encontrado" 
+                           description={`Não encontramos pacientes para "${search}". Tente buscar por outro termo ou cadastre um novo paciente.`}
+                           action={{ label: 'Novo Paciente', onClick: () => { setSearch(''); openModal(); } }}
+                         />
+                       </td></tr>
                    ) : filtered.length === 0 ? (
-                       <tr><td colSpan={4} className="p-20 text-center text-slate-400 font-bold uppercase text-xs tracking-widest">Nenhum paciente na base.</td></tr>
+                       <tr><td colSpan={4} className="p-8">
+                         <EmptyState 
+                           icon="users" 
+                           title="Nenhum paciente cadastrado" 
+                           description="Comece a construir sua base de pacientes. Cadastre o primeiro paciente para gerenciar prontuários, agendamentos e muito mais."
+                           action={{ label: 'Cadastrar Primeiro Paciente', onClick: () => openModal() }}
+                         />
+                       </td></tr>
                    ) : filtered.map(p => (
                       <tr key={p.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors group cursor-default">
                          <td className="px-8 py-6">
@@ -208,8 +253,9 @@ const PatientsTab: React.FC<{ user: any }> = ({ user }) => {
                          </td>
                          <td className="px-8 py-6">
                             <div className="flex justify-center gap-2 opacity-0 group-hover:opacity-100 transition-all transform translate-x-2 group-hover:translate-x-0">
-                                <button onClick={() => openModal(p)} className="p-3 bg-white dark:bg-slate-700 text-blue-600 rounded-xl shadow-sm hover:scale-110 transition-all border border-slate-100 dark:border-slate-600"><Edit2 className="w-4 h-4" /></button>
-                                <button onClick={() => handleDelete(p.id)} className="p-3 bg-white dark:bg-slate-700 text-rose-600 rounded-xl shadow-sm hover:scale-110 transition-all border border-slate-100 dark:border-slate-600"><Trash2 className="w-4 h-4" /></button>
+                                <button onClick={() => setViewingPatient(p)} className="p-3 bg-white dark:bg-slate-700 text-emerald-600 rounded-xl shadow-sm hover:scale-110 transition-all border border-slate-100 dark:border-slate-600" title="Ver detalhes"><Eye className="w-4 h-4" /></button>
+                                <button onClick={() => openModal(p)} className="p-3 bg-white dark:bg-slate-700 text-blue-600 rounded-xl shadow-sm hover:scale-110 transition-all border border-slate-100 dark:border-slate-600" title="Editar"><Edit2 className="w-4 h-4" /></button>
+                                <button onClick={() => handleDelete(p.id)} className="p-3 bg-white dark:bg-slate-700 text-rose-600 rounded-xl shadow-sm hover:scale-110 transition-all border border-slate-100 dark:border-slate-600" title="Excluir"><Trash2 className="w-4 h-4" /></button>
                             </div>
                          </td>
                       </tr>
@@ -217,6 +263,19 @@ const PatientsTab: React.FC<{ user: any }> = ({ user }) => {
                 </tbody>
              </table>
           </div>
+          {!loading && totalPatients > 0 && (
+            <Pagination
+              currentPage={currentPage}
+              totalPages={Math.ceil(totalPatients / itemsPerPage)}
+              itemsPerPage={itemsPerPage}
+              totalItems={totalPatients}
+              onPageChange={setCurrentPage}
+              onItemsPerPageChange={(newItemsPerPage) => {
+                setItemsPerPage(newItemsPerPage);
+                setCurrentPage(1);
+              }}
+            />
+          )}
        </div>
 
        {/* Modal Expandido - Ficha Completa */}
@@ -303,6 +362,197 @@ const PatientsTab: React.FC<{ user: any }> = ({ user }) => {
                            </button>
                        </div>
                    </form>
+               </div>
+           </div>
+       )}
+
+       {/* Modal de Visualização de Detalhes do Paciente */}
+       {viewingPatient && (
+           <div className="fixed inset-0 z-[200] flex items-center justify-center bg-slate-950/80 backdrop-blur-md p-4">
+               <div className="bg-white dark:bg-slate-900 w-full max-w-6xl rounded-[3.5rem] shadow-2xl animate-in zoom-in-95 border border-white/10 overflow-hidden flex flex-col max-h-[95vh]">
+                   <div className="p-10 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center bg-slate-50 dark:bg-slate-800/50">
+                       <div className="flex items-center gap-4">
+                           <div className="p-4 bg-emerald-600 text-white rounded-2xl shadow-xl"><User className="w-8 h-8" /></div>
+                           <div>
+                               <h3 className="font-black text-2xl text-slate-900 dark:text-white uppercase italic tracking-tighter leading-none">
+                                   {viewingPatient.name}
+                               </h3>
+                               <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.3em] mt-2">Detalhes do Paciente</p>
+                           </div>
+                       </div>
+                       <button onClick={() => { setViewingPatient(null); setViewTab('info'); }} className="p-4 bg-white dark:bg-slate-700 rounded-full shadow-sm text-slate-400 hover:scale-110 transition-transform"><X className="w-6 h-6" /></button>
+                   </div>
+                   
+                   {/* Tabs */}
+                   <div className="flex gap-2 p-4 border-b border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/50">
+                       <button
+                           onClick={() => setViewTab('info')}
+                           className={`px-6 py-3 rounded-xl font-bold text-sm transition-all ${
+                               viewTab === 'info'
+                                   ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-lg'
+                                   : 'text-slate-500 hover:text-slate-900 dark:hover:text-white'
+                           }`}
+                       >
+                           <User className="w-4 h-4 inline mr-2" />
+                           Informações
+                       </button>
+                       <button
+                           onClick={() => setViewTab('loyalty')}
+                           className={`px-6 py-3 rounded-xl font-bold text-sm transition-all ${
+                               viewTab === 'loyalty'
+                                   ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-lg'
+                                   : 'text-slate-500 hover:text-slate-900 dark:hover:text-white'
+                           }`}
+                       >
+                           <Gift className="w-4 h-4 inline mr-2" />
+                           Fidelidade
+                       </button>
+                   </div>
+
+                   {/* Conteúdo das Tabs */}
+                   <div className="flex-1 overflow-y-auto p-10">
+                       {viewTab === 'info' && (
+                           <div className="space-y-8">
+                               <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                                   <div className="space-y-4">
+                                       <h4 className="text-[11px] font-black text-slate-400 uppercase tracking-[0.2em] border-b pb-2 flex items-center gap-2">
+                                           <User className="w-3.5 h-3.5 text-emerald-500"/> Identidade
+                                       </h4>
+                                       <div className="space-y-3">
+                                           <div>
+                                               <p className="text-xs font-bold text-slate-400 mb-1">Nome Completo</p>
+                                               <p className="text-base font-bold text-slate-900 dark:text-white">{viewingPatient.name}</p>
+                                           </div>
+                                           <div className="grid grid-cols-2 gap-4">
+                                               <div>
+                                                   <p className="text-xs font-bold text-slate-400 mb-1">Telefone</p>
+                                                   <p className="text-sm font-bold text-slate-700 dark:text-slate-300">{viewingPatient.phone}</p>
+                                               </div>
+                                               {viewingPatient.birth_date && (
+                                                   <div>
+                                                       <p className="text-xs font-bold text-slate-400 mb-1">Data de Nascimento</p>
+                                                       <p className="text-sm font-bold text-slate-700 dark:text-slate-300">{new Date(viewingPatient.birth_date).toLocaleDateString('pt-BR')}</p>
+                                                   </div>
+                                               )}
+                                           </div>
+                                           {viewingPatient.email && (
+                                               <div>
+                                                   <p className="text-xs font-bold text-slate-400 mb-1">E-mail</p>
+                                                   <p className="text-sm font-bold text-slate-700 dark:text-slate-300">{viewingPatient.email}</p>
+                                               </div>
+                                           )}
+                                           {viewingPatient.cpf && (
+                                               <div>
+                                                   <p className="text-xs font-bold text-slate-400 mb-1">CPF</p>
+                                                   <p className="text-sm font-bold text-slate-700 dark:text-slate-300">{viewingPatient.cpf}</p>
+                                               </div>
+                                           )}
+                                       </div>
+                                   </div>
+
+                                   <div className="space-y-4">
+                                       <h4 className="text-[11px] font-black text-slate-400 uppercase tracking-[0.2em] border-b pb-2 flex items-center gap-2">
+                                           <Activity className="w-3.5 h-3.5 text-indigo-500"/> Perfil Clínico
+                                       </h4>
+                                       <div className="space-y-3">
+                                           {(viewingPatient.height || viewingPatient.weight) && (
+                                               <div className="flex gap-4">
+                                                   {viewingPatient.height && (
+                                                       <div>
+                                                           <p className="text-xs font-bold text-slate-400 mb-1">Altura</p>
+                                                           <p className="text-sm font-bold text-slate-700 dark:text-slate-300">{viewingPatient.height} cm</p>
+                                                       </div>
+                                                   )}
+                                                   {viewingPatient.weight && (
+                                                       <div>
+                                                           <p className="text-xs font-bold text-slate-400 mb-1">Peso</p>
+                                                           <p className="text-sm font-bold text-slate-700 dark:text-slate-300">{viewingPatient.weight} kg</p>
+                                                       </div>
+                                                   )}
+                                               </div>
+                                           )}
+                                           {viewingPatient.profession && (
+                                               <div>
+                                                   <p className="text-xs font-bold text-slate-400 mb-1">Profissão</p>
+                                                   <p className="text-sm font-bold text-slate-700 dark:text-slate-300">{viewingPatient.profession}</p>
+                                               </div>
+                                           )}
+                                           {viewingPatient.marketing_source && (
+                                               <div>
+                                                   <p className="text-xs font-bold text-slate-400 mb-1">Fonte de Marketing</p>
+                                                   <p className="text-sm font-bold text-slate-700 dark:text-slate-300">{viewingPatient.marketing_source}</p>
+                                               </div>
+                                           )}
+                                       </div>
+                                   </div>
+                               </div>
+
+                               {viewingPatient.address_city && (
+                                   <div className="space-y-4">
+                                       <h4 className="text-[11px] font-black text-slate-400 uppercase tracking-[0.2em] border-b pb-2 flex items-center gap-2">
+                                           <Home className="w-3.5 h-3.5 text-amber-500"/> Endereço
+                                       </h4>
+                                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                           {viewingPatient.address_street && (
+                                               <div>
+                                                   <p className="text-xs font-bold text-slate-400 mb-1">Logradouro</p>
+                                                   <p className="text-sm font-bold text-slate-700 dark:text-slate-300">
+                                                       {viewingPatient.address_street}
+                                                       {viewingPatient.address_number && `, ${viewingPatient.address_number}`}
+                                                       {viewingPatient.address_complement && ` - ${viewingPatient.address_complement}`}
+                                                   </p>
+                                               </div>
+                                           )}
+                                           {viewingPatient.address_neighborhood && (
+                                               <div>
+                                                   <p className="text-xs font-bold text-slate-400 mb-1">Bairro</p>
+                                                   <p className="text-sm font-bold text-slate-700 dark:text-slate-300">{viewingPatient.address_neighborhood}</p>
+                                               </div>
+                                           )}
+                                           {viewingPatient.address_city && (
+                                               <div>
+                                                   <p className="text-xs font-bold text-slate-400 mb-1">Cidade / UF</p>
+                                                   <p className="text-sm font-bold text-slate-700 dark:text-slate-300">
+                                                       {viewingPatient.address_city}
+                                                       {viewingPatient.address_state && `, ${viewingPatient.address_state}`}
+                                                   </p>
+                                               </div>
+                                           )}
+                                           {viewingPatient.cep && (
+                                               <div>
+                                                   <p className="text-xs font-bold text-slate-400 mb-1">CEP</p>
+                                                   <p className="text-sm font-bold text-slate-700 dark:text-slate-300">{viewingPatient.cep}</p>
+                                               </div>
+                                           )}
+                                       </div>
+                                   </div>
+                               )}
+
+                               {viewingPatient.notes && (
+                                   <div className="space-y-4">
+                                       <h4 className="text-[11px] font-black text-slate-400 uppercase tracking-[0.2em] border-b pb-2">Observações</h4>
+                                       <p className="text-sm text-slate-700 dark:text-slate-300 whitespace-pre-wrap">{viewingPatient.notes}</p>
+                                   </div>
+                               )}
+
+                               <div className="flex gap-4 pt-6 border-t border-slate-100 dark:border-slate-800">
+                                   <button
+                                       onClick={() => { setViewingPatient(null); openModal(viewingPatient); }}
+                                       className="flex-1 px-6 py-3 bg-emerald-600 text-white rounded-xl font-bold hover:bg-emerald-700 transition-all flex items-center justify-center gap-2"
+                                   >
+                                       <Edit2 className="w-4 h-4" />
+                                       Editar Paciente
+                                   </button>
+                               </div>
+                           </div>
+                       )}
+
+                       {viewTab === 'loyalty' && (
+                           <LoyaltyTab 
+                               patient={viewingPatient}
+                           />
+                       )}
+                   </div>
                </div>
            </div>
        )}

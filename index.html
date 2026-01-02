@@ -3,9 +3,71 @@
 <html lang="pt-BR">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-    <meta name="theme-color" content="#064e3b" />
-    <title>Clinify Pro - Gestão de Elite</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes" />
+    
+    <!-- PWA Meta Tags -->
+    <meta name="theme-color" content="#4f46e5" />
+    <meta name="background-color" content="#0f172a" />
+    <meta name="color-scheme" content="light dark" />
+    
+    <!-- iOS PWA Meta Tags -->
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="Clinify" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <link rel="apple-touch-icon" sizes="152x152" href="/icons/icon-152x152.png" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
+    <link rel="apple-touch-icon" sizes="167x167" href="/icons/icon-192x192.png" />
+    
+    <!-- Splash screens para iOS -->
+    <link rel="apple-touch-startup-image" href="/icons/icon-512x512.png" />
+    
+    <!-- Favicon -->
+    <link rel="icon" type="image/x-icon" href="/favicon.ico" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png" />
+    <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png" />
+    
+    <!-- Manifest -->
+    <link rel="manifest" href="/manifest.json" />
+    
+    <!-- SEO Meta Tags -->
+    <meta name="description" content="Clinify - Sistema completo de gestão financeira e CRM para clínicas de estética. Controle suas finanças, agendamentos, pacientes, estoque e muito mais em uma única plataforma intuitiva e moderna." />
+    <meta name="keywords" content="gestão clínica, estética, CRM, financeiro, agendamento, orçamento, WhatsApp, gestão de pacientes, prontuário eletrônico, controle de estoque, clínica estética, software médico" />
+    <meta name="author" content="Clinify" />
+    <meta name="robots" content="index, follow" />
+    <meta name="language" content="Portuguese" />
+    <meta name="revisit-after" content="7 days" />
+    
+    <!-- Open Graph / Facebook -->
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Clinify - Gestão Estética Inteligente" />
+    <meta property="og:description" content="Sistema completo de gestão financeira e CRM para clínicas de estética. Controle suas finanças, agendamentos, pacientes, estoque e muito mais em uma única plataforma intuitiva e moderna." />
+    <meta property="og:image" content="https://clinify.app/og-image.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:type" content="image/png" />
+    <meta property="og:url" content="https://clinify.app/" />
+    <meta property="og:site_name" content="Clinify" />
+    <meta property="og:locale" content="pt_BR" />
+    
+    <!-- Twitter Card -->
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Clinify - Gestão Estética Inteligente" />
+    <meta name="twitter:description" content="Sistema completo de gestão financeira e CRM para clínicas de estética. Controle suas finanças, agendamentos, pacientes, estoque e muito mais." />
+    <meta name="twitter:image" content="https://clinify.app/og-image.png" />
+    <meta name="twitter:image:alt" content="Dashboard do Clinify - Sistema de gestão para clínicas de estética" />
+    
+    <!-- Microsoft Tiles -->
+    <meta name="msapplication-TileColor" content="#4f46e5" />
+    <meta name="msapplication-TileImage" content="/icons/icon-144x144.png" />
+    <meta name="msapplication-config" content="/browserconfig.xml" />
+    
+    <!-- Preconnect para performance -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    
+    <title>Clinify - Gestão Estética Inteligente</title>
     
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
@@ -22,6 +84,19 @@
                 50: '#f0fdf4',
                 500: '#10b981',
                 600: '#059669',
+                900: '#064e3b',
+                950: '#022c22',
+              },
+              brand: {
+                50: '#f0fdf4',
+                100: '#dcfce7',
+                200: '#bbf7d0',
+                300: '#86efac',
+                400: '#4ade80',
+                500: '#10b981',
+                600: '#059669',
+                700: '#047857',
+                800: '#065f46',
                 900: '#064e3b',
                 950: '#022c22',
               }

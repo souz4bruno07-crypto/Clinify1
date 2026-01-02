@@ -1,26 +1,29 @@
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useNavigate, Link } from 'react-router';
 import { 
   TrendingUp, MessageSquare, FileText, Plus, 
   ArrowRight, Users, Sparkles, DollarSign, 
-  Target, BarChart3, Users2, BellRing, Cake,
-  ShieldCheck, Wallet, Zap, CalendarDays, Activity,
-  ArrowUpRight, ArrowDownRight, Gem, Briefcase,
-  ChevronRight, X, Gift, Send, Check, Percent, Edit3, Loader2, Coins
+  Target, BarChart3, Calendar, Activity,
+  ArrowUpRight, ArrowDownRight, CheckCircle2,
+  Clock, User, Zap, Wallet, Briefcase,
+  Gift, Bell, Flame, Sun, Moon, Sunset, TrendingDown
 } from 'lucide-react';
-import { Transaction, ChatContact, Quote, MonthlyTarget } from '../../types';
+import { Transaction, Appointment, User as UserType, ChatContact, Quote } from '../../types';
 import { 
   getChatContacts, 
   getQuotes,
-  getMonthlyTarget,
-  upsertMonthlyTarget,
-  sendMessage
-} from '../../services/supabaseService';
-import { formatCurrency, formatCurrencyValue, parseCurrencyInput } from '../../utils/formatters';
+  getTodayAppointments,
+  getUpcomingBirthdays,
+  type BirthdayPatient
+} from '../../services/backendService';
+import { formatCurrency } from '../../utils/formatters';
+import AnimatedNumber from '../ui/AnimatedNumber';
+import { SkeletonAppointmentCards } from '../ui/Skeleton';
+import EmptyState from '../ui/EmptyState';
 
 interface HomeTabProps {
-  user: any;
+  user: UserType | null;
   transactions: Transaction[];
   onOpenTransactionModal: () => void;
   startDate: Date;
@@ -29,48 +32,49 @@ interface HomeTabProps {
 }
 
 const HomeTab: React.FC<HomeTabProps> = ({ user, transactions, onOpenTransactionModal, startDate, target, setMonthlyGoal }) => {
+  const navigate = useNavigate();
+  const [todayAppointments, setTodayAppointments] = useState<Appointment[]>([]);
   const [leads, setLeads] = useState<ChatContact[]>([]);
   const [quotes, setQuotes] = useState<Quote[]>([]);
+  const [birthdays, setBirthdays] = useState<BirthdayPatient[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  
-  // Mimos State
-  const [selectedMimoPatient, setSelectedMimoPatient] = useState<any>(null);
-  const [isSendingMimo, setIsSendingMimo] = useState(false);
-  const [mimoSent, setMimoSent] = useState(false);
 
-  // Goal State
-  const [isGoalModalOpen, setIsGoalModalOpen] = useState(false);
-  const [goalInput, setGoalInput] = useState('');
-  const [isSavingGoal, setIsSavingGoal] = useState(false);
+  const monthLabel = useMemo(() => 
+    startDate.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' }),
+    [startDate]
+  );
 
-  const monthLabel = startDate.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
+  // Saudação personalizada baseada no horário
+  const greeting = useMemo(() => {
+    const hour = new Date().getHours();
+    if (hour < 12) return { text: 'Bom dia', icon: Sun, emoji: '☀️' };
+    if (hour < 18) return { text: 'Boa tarde', icon: Sunset, emoji: '🌤️' };
+    return { text: 'Boa noite', icon: Moon, emoji: '🌙' };
+  }, []);
 
-  const loadHomeData = async () => {
+  const loadHomeData = useCallback(async () => {
     if (!user) return;
     setIsLoading(true);
     try {
-      const [chats, qts] = await Promise.all([
-        getChatContacts(user.id),
-        getQuotes(user.id)
+      const [todayAppts, chatContacts, qts, bdays] = await Promise.all([
+        getTodayAppointments(user.id),
+        getChatContacts(user.id).catch(() => []),
+        getQuotes(user.id).catch(() => []),
+        getUpcomingBirthdays(user.id).catch(() => [])
       ]);
-      setLeads(chats);
+      setTodayAppointments(todayAppts);
+      setLeads(chatContacts);
       setQuotes(qts);
-      if (target) setGoalInput(formatCurrencyValue(target.planned_revenue));
+      setBirthdays(bdays);
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [user]);
 
   useEffect(() => {
     loadHomeData();
-  }, [user, startDate]);
+  }, [loadHomeData, startDate]);
 
-  // Sincroniza input ao abrir modal
-  useEffect(() => {
-    if (isGoalModalOpen && target) {
-      setGoalInput(formatCurrencyValue(target.planned_revenue));
-    }
-  }, [isGoalModalOpen, target]);
 
   const stats = useMemo(() => {
     const currentMonthTxs = transactions.filter(t => {
@@ -81,308 +85,652 @@ const HomeTab: React.FC<HomeTabProps> = ({ user, transactions, onOpenTransaction
     const revenue = currentMonthTxs.filter(t => t.type === 'revenue').reduce((s, t) => s + t.amount, 0);
     const expenses = currentMonthTxs.filter(t => t.type === 'expense').reduce((s, t) => s + t.amount, 0);
     const profit = revenue - expenses;
-    const margin = revenue > 0 ? (profit / revenue) * 100 : 0;
     
-    const revTxs = currentMonthTxs.filter(t => t.type === 'revenue');
-    const ticketMedio = revTxs.length > 0 ? revenue / revTxs.length : 0;
-
-    const pipelineTotal = quotes.filter(q => q.status === 'draft' || q.status === 'sent').reduce((s, q) => s + q.totalAmount, 0);
-    const activeLeads = leads.length;
+    // Comparação com mês anterior
+    const prevMonth = new Date(startDate.getFullYear(), startDate.getMonth() - 1, 1);
+    const prevMonthTxs = transactions.filter(t => {
+      const d = new Date(t.date);
+      return d.getMonth() === prevMonth.getMonth() && d.getFullYear() === prevMonth.getFullYear();
+    });
+    const prevRevenue = prevMonthTxs.filter(t => t.type === 'revenue').reduce((s, t) => s + t.amount, 0);
+    const prevExpenses = prevMonthTxs.filter(t => t.type === 'expense').reduce((s, t) => s + t.amount, 0);
+    const prevProfit = prevRevenue - prevExpenses;
+    
+    const revenueGrowth = prevRevenue > 0 ? ((revenue - prevRevenue) / prevRevenue) * 100 : 0;
+    const expensesGrowth = prevExpenses > 0 ? ((expenses - prevExpenses) / prevExpenses) * 100 : 0;
+    const profitGrowth = prevProfit !== 0 ? ((profit - prevProfit) / Math.abs(prevProfit)) * 100 : 0;
+    
+    // Agendamentos confirmados hoje
+    const confirmedToday = todayAppointments.filter(a => a.status === 'confirmed').length;
 
     return { 
-        revenue, profit, margin, ticketMedio, 
-        pipelineTotal, activeLeads,
-        goalPct: target?.planned_revenue ? (revenue / target.planned_revenue) * 100 : 0
+      revenue, 
+      expenses, 
+      profit, 
+      revenueGrowth, 
+      expensesGrowth, 
+      profitGrowth,
+      confirmedToday,
+      totalToday: todayAppointments.length
     };
-  }, [transactions, target, quotes, leads, startDate]);
+  }, [transactions, startDate, todayAppointments]);
 
-  const handleSaveGoal = async () => {
-    if (!user) return;
-    setIsSavingGoal(true);
-    const newVal = parseCurrencyInput(goalInput);
-    await setMonthlyGoal(newVal, target?.planned_purchases || 0);
-    setIsSavingGoal(false);
-    setIsGoalModalOpen(false);
+  // Últimas transações (4 mais recentes)
+  const latestTransactions = useMemo(() => {
+    return [...transactions]
+      .sort((a, b) => b.date - a.date)
+      .slice(0, 4);
+  }, [transactions]);
+
+  // Próximos agendamentos
+  const upcomingAppointments = useMemo(() => {
+    const now = Date.now();
+    return todayAppointments
+      .filter(a => a.status !== 'canceled')
+      .sort((a, b) => a.startTime - b.startTime)
+      .slice(0, 4);
+  }, [todayAppointments]);
+
+  const getStatusStyle = (status: Appointment['status']) => {
+    switch (status) {
+      case 'confirmed': return 'bg-emerald-500 text-white';
+      case 'completed': return 'bg-slate-600 text-white';
+      case 'canceled': return 'bg-rose-500 text-white';
+      default: return 'bg-orange-500 text-white';
+    }
   };
 
-  const handleSendMimo = async (mimoType: string) => {
-    if (!selectedMimoPatient) return;
-    setIsSendingMimo(true);
-    
-    const messages: Record<string, string> = {
-      'gift': `Parabéns ${selectedMimoPatient.name}! 🎉 A Clínica preparou um presente especial para você: Uma Limpeza de Pele Cortesia em sua próxima visita. Vamos agendar?`,
-      'discount': `Olá ${selectedMimoPatient.name}! Como seu aniversário está chegando, liberamos um cupom de 15% OFF em qualquer procedimento de Harmonização. Aproveite! 🎂`,
-      'vip': `Feliz aniversário antecipado, ${selectedMimoPatient.name}! Você é uma de nossas pacientes VIPs e ganhou um kit exclusivo de Home-Care. Pode vir buscar hoje? 🎁`
-    };
-
-    await sendMessage(selectedMimoPatient.id, messages[mimoType], 'outbound');
-    
-    setIsSendingMimo(false);
-    setMimoSent(true);
-    setTimeout(() => {
-      setMimoSent(false);
-      setSelectedMimoPatient(null);
-    }, 2000);
+  const getStatusLabel = (status: Appointment['status']) => {
+    switch (status) {
+      case 'confirmed': return 'Confirmado';
+      case 'completed': return 'Concluído';
+      case 'canceled': return 'Cancelado';
+      default: return 'Pendente';
+    }
   };
+
+  const formatTransactionDate = (timestamp: number) => {
+    const date = new Date(timestamp);
+    const today = new Date();
+    const yesterday = new Date(today);
+    yesterday.setDate(yesterday.getDate() - 1);
+    
+    if (date.toDateString() === today.toDateString()) {
+      return 'Hoje';
+    } else if (date.toDateString() === yesterday.toDateString()) {
+      return 'Ontem';
+    } else {
+      return date.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
+    }
+  };
+
+  const formatTransactionTime = (timestamp: number) => {
+    return new Date(timestamp).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+  };
+
+
+  // Progresso da meta mensal
+  const goalProgress = target && target.planned_revenue > 0 
+    ? Math.min((stats.revenue / target.planned_revenue) * 100, 100) 
+    : 0;
+
+  // Aniversariantes de hoje
+  const todayBirthdays = useMemo(() => {
+    const today = new Date();
+    return birthdays.filter(b => {
+      const bday = new Date(b.birthday);
+      return bday.getDate() === today.getDate() && bday.getMonth() === today.getMonth();
+    });
+  }, [birthdays]);
+
+  // Próximos aniversariantes (próximos 7 dias)
+  const upcomingBirthdays = useMemo(() => {
+    const today = new Date();
+    const nextWeek = new Date(today);
+    nextWeek.setDate(today.getDate() + 7);
+    return birthdays.filter(b => {
+      const bday = new Date(b.birthday);
+      bday.setFullYear(today.getFullYear());
+      return bday >= today && bday <= nextWeek;
+    }).slice(0, 3);
+  }, [birthdays]);
+
+  // Callbacks de navegação
+  const navigateToAgenda = useCallback(() => navigate('/dashboard/agenda'), [navigate]);
+  const navigateToCRM = useCallback(() => navigate('/dashboard/crm'), [navigate]);
+  const navigateToOrcamentos = useCallback(() => navigate('/dashboard/orcamentos'), [navigate]);
+  const navigateToPacientes = useCallback(() => navigate('/dashboard/pacientes'), [navigate]);
+
+  // Tarefas e lembretes do dia
+  const todayTasks = useMemo(() => {
+    const tasks: Array<{
+      icon: typeof Bell;
+      text: string;
+      color: 'amber' | 'indigo' | 'blue' | 'pink';
+      action: () => void;
+    }> = [];
+    
+    if (stats.totalToday - stats.confirmedToday > 0) {
+      tasks.push({
+        icon: Bell,
+        text: `${stats.totalToday - stats.confirmedToday} agendamento(s) pendente(s) de confirmação`,
+        color: 'amber',
+        action: navigateToAgenda
+      });
+    }
+    if (leads.length > 0) {
+      tasks.push({
+        icon: MessageSquare,
+        text: `${leads.length} lead(s) aguardando resposta`,
+        color: 'indigo',
+        action: navigateToCRM
+      });
+    }
+    const pendingQuotes = quotes.filter(q => q.status === 'draft' || q.status === 'sent').length;
+    if (pendingQuotes > 0) {
+      tasks.push({
+        icon: FileText,
+        text: `${pendingQuotes} orçamento(s) pendente(s)`,
+        color: 'blue',
+        action: navigateToOrcamentos
+      });
+    }
+    if (todayBirthdays.length > 0) {
+      tasks.push({
+        icon: Gift,
+        text: `${todayBirthdays.length} aniversariante(s) hoje!`,
+        color: 'pink',
+        action: navigateToPacientes
+      });
+    }
+    return tasks;
+  }, [stats, leads, quotes, todayBirthdays, navigateToAgenda, navigateToCRM, navigateToOrcamentos, navigateToPacientes]);
 
   return (
-    <div className="space-y-12 animate-in fade-in duration-700 pb-20">
-      
-      {/* SEÇÃO 1: NÚCLEO FINANCEIRO */}
-      <section className="space-y-8">
-          <div className="flex items-end justify-between px-2">
-              <div>
-                  <h3 className="text-xs font-black uppercase tracking-[0.4em] text-emerald-600 dark:text-emerald-400 mb-2">Núcleo Financeiro</h3>
-                  <h2 className="text-4xl font-black text-slate-900 dark:text-white tracking-tighter italic">Saúde e Capital</h2>
-              </div>
-              <Link to="/dashboard/finance" className="text-[10px] font-black uppercase text-slate-400 hover:text-emerald-600 transition-colors flex items-center gap-2 tracking-widest">
-                  Gestão Completa <ArrowRight className="w-4 h-4" />
-              </Link>
+    <div className="space-y-8 animate-in fade-in duration-700 pb-4">
+      {/* BOAS-VINDAS PERSONALIZADAS */}
+      <div className="px-2">
+        <div className="flex items-center justify-between mb-4">
+          <div>
+            <div className="flex items-center gap-3 mb-2">
+              <greeting.icon className="w-8 h-8 text-emerald-600 dark:text-emerald-400" />
+              <h1 className="text-3xl font-black text-slate-900 dark:text-white tracking-tighter">
+                {greeting.text}, {user?.name?.split(' ')[0] || 'Usuário'}! {greeting.emoji}
+              </h1>
+            </div>
+            <p className="text-sm text-slate-600 dark:text-slate-400">
+              {new Date().toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
+            </p>
           </div>
+          {goalProgress > 0 && (
+            <div className="hidden md:flex items-center gap-3 bg-gradient-to-r from-emerald-50 to-emerald-100 dark:from-emerald-900/20 dark:to-emerald-800/20 rounded-2xl px-6 py-4 border border-emerald-200 dark:border-emerald-800">
+              <Target className="w-6 h-6 text-emerald-600 dark:text-emerald-400" />
+              <div>
+                <p className="text-xs font-black text-emerald-700 dark:text-emerald-300 uppercase tracking-widest">Meta do Mês</p>
+                <p className="text-2xl font-black text-emerald-900 dark:text-emerald-100">{goalProgress.toFixed(0)}%</p>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-              <Link to="/dashboard/finance/dre" className="lg:col-span-8 bg-slate-900 rounded-[3.5rem] p-10 md:p-12 text-white shadow-2xl relative overflow-hidden group hover:scale-[1.01] transition-all">
-                  <div className="absolute top-0 right-0 p-12 opacity-5 group-hover:scale-110 transition-transform"><TrendingUp className="w-64 h-64" /></div>
-                  <div className="relative z-10 grid grid-cols-1 md:grid-cols-12 gap-8 md:gap-12">
-                      <div className="md:col-span-7 flex flex-col justify-between">
-                          <div>
-                            <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2">Faturamento Realizado ({monthLabel})</p>
-                            <h3 className="text-4xl sm:text-5xl md:text-6xl font-black tracking-tighter mb-8 whitespace-nowrap overflow-visible leading-none">
-                              {formatCurrency(stats.revenue)}
+      {/* WIDGET: FOCO DO DIA */}
+      {todayTasks.length > 0 && (
+        <section className="space-y-4">
+          <div className="px-2">
+            <h2 className="text-xl font-black text-slate-900 dark:text-white tracking-tighter flex items-center gap-2">
+              <Flame className="w-5 h-5 text-orange-500" />
+              Foco do Dia
+            </h2>
+            <p className="text-xs text-slate-500 dark:text-slate-400">Atenção necessária hoje</p>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {todayTasks.map((task, idx) => {
+              const Icon = task.icon;
+              const colorClasses = {
+                amber: 'bg-amber-50 dark:bg-amber-900/10 border-amber-200 dark:border-amber-800 text-amber-900 dark:text-amber-300',
+                indigo: 'bg-indigo-50 dark:bg-indigo-900/10 border-indigo-200 dark:border-indigo-800 text-indigo-900 dark:text-indigo-300',
+                blue: 'bg-blue-50 dark:bg-blue-900/10 border-blue-200 dark:border-blue-800 text-blue-900 dark:text-blue-300',
+                pink: 'bg-pink-50 dark:bg-pink-900/10 border-pink-200 dark:border-pink-800 text-pink-900 dark:text-pink-300'
+              };
+              return (
+                <button
+                  key={idx}
+                  onClick={task.action}
+                  className={`flex items-center gap-4 p-5 rounded-2xl border-2 hover:scale-[1.02] transition-all text-left ${colorClasses[task.color as keyof typeof colorClasses]}`}
+                >
+                  <Icon className="w-6 h-6 shrink-0" />
+                  <span className="text-sm font-black">{task.text}</span>
+                  <ArrowRight className="w-4 h-4 ml-auto shrink-0" />
+                </button>
+              );
+            })}
+          </div>
+        </section>
+      )}
+
+      {/* WIDGET: METAS DO MÊS COM PROGRESSO VISUAL */}
+      {target && target.planned_revenue > 0 && (
+        <section className="space-y-4">
+          <div className="px-2">
+            <h2 className="text-xl font-black text-slate-900 dark:text-white tracking-tighter flex items-center gap-2">
+              <Target className="w-5 h-5 text-emerald-600" />
+              Metas do Mês
+            </h2>
+            <p className="text-xs text-slate-500 dark:text-slate-400">Acompanhamento de receita e despesas planejadas</p>
+          </div>
+          <div className="bg-white dark:bg-slate-900 rounded-3xl p-6 border border-slate-200 dark:border-slate-800 shadow-sm">
+            <div className="space-y-6">
+              {/* Meta de Receita */}
+              <div>
+                <div className="flex items-center justify-between mb-3">
+                  <div className="flex items-center gap-2">
+                    <TrendingUp className="w-4 h-4 text-emerald-600" />
+                    <span className="text-sm font-black text-slate-900 dark:text-white">Receita Planejada</span>
+                  </div>
+                  <span className="text-sm font-black text-slate-500">
+                    {formatCurrency(stats.revenue)} / {formatCurrency(target.planned_revenue)}
+                  </span>
+                </div>
+                <div className="relative h-4 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
+                  <div 
+                    className="absolute inset-y-0 left-0 bg-gradient-to-r from-emerald-500 to-emerald-600 rounded-full transition-all duration-1000 ease-out"
+                    style={{ width: `${goalProgress}%` }}
+                  />
+                  <div className="absolute inset-0 flex items-center justify-center">
+                    <span className="text-[10px] font-black text-slate-700 dark:text-slate-300 z-10">
+                      {goalProgress.toFixed(1)}%
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Meta de Despesas */}
+              {target.planned_purchases > 0 && (
+                <div>
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center gap-2">
+                      <TrendingDown className="w-4 h-4 text-rose-600" />
+                      <span className="text-sm font-black text-slate-900 dark:text-white">Despesas Planejadas</span>
+                    </div>
+                    <span className="text-sm font-black text-slate-500">
+                      {formatCurrency(stats.expenses)} / {formatCurrency(target.planned_purchases)}
+                    </span>
+                  </div>
+                  <div className="relative h-4 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
+                    <div 
+                      className="absolute inset-y-0 left-0 bg-gradient-to-r from-rose-500 to-rose-600 rounded-full transition-all duration-1000 ease-out"
+                      style={{ width: `${Math.min((stats.expenses / target.planned_purchases) * 100, 100)}%` }}
+                    />
+                    <div className="absolute inset-0 flex items-center justify-center">
+                      <span className="text-[10px] font-black text-slate-700 dark:text-slate-300 z-10">
+                        {Math.min((stats.expenses / target.planned_purchases) * 100, 100).toFixed(1)}%
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </section>
+      )}
+
+      {/* WIDGET: ANIVERSARIANTES */}
+      {(todayBirthdays.length > 0 || upcomingBirthdays.length > 0) && (
+        <section className="space-y-4">
+          <div className="px-2">
+            <h2 className="text-xl font-black text-slate-900 dark:text-white tracking-tighter flex items-center gap-2">
+              <Gift className="w-5 h-5 text-pink-500" />
+              Aniversariantes
+            </h2>
+            <p className="text-xs text-slate-500 dark:text-slate-400">Celebre com seus pacientes</p>
+          </div>
+          <div className="bg-gradient-to-br from-pink-50 to-rose-50 dark:from-pink-900/20 dark:to-rose-900/20 rounded-3xl p-6 border border-pink-200 dark:border-pink-800 shadow-sm">
+            {todayBirthdays.length > 0 ? (
+              <div className="space-y-4">
+                <div className="flex items-center gap-2 mb-4">
+                  <Sparkles className="w-5 h-5 text-pink-600 dark:text-pink-400" />
+                  <span className="text-sm font-black text-pink-900 dark:text-pink-300 uppercase tracking-wider">
+                    Hoje é aniversário de:
+                  </span>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  {todayBirthdays.map((bday) => (
+                    <div key={bday.id} className="flex items-center gap-3 p-4 bg-white/60 dark:bg-slate-800/60 rounded-2xl">
+                      <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-pink-500 to-rose-500 flex items-center justify-center text-white font-black text-lg shadow-lg">
+                        {bday.name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()}
+                      </div>
+                      <div className="flex-1">
+                        <p className="font-black text-slate-900 dark:text-white">{bday.name}</p>
+                        <p className="text-xs text-slate-600 dark:text-slate-400">🎂 Aniversário hoje!</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                <p className="text-sm font-black text-pink-900 dark:text-pink-300 mb-3">Próximos aniversários:</p>
+                {upcomingBirthdays.map((bday) => {
+                  const bdayDate = new Date(bday.birthday);
+                  const today = new Date();
+                  bdayDate.setFullYear(today.getFullYear());
+                  const daysUntil = Math.ceil((bdayDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+                  return (
+                    <div key={bday.id} className="flex items-center gap-3 p-3 bg-white/60 dark:bg-slate-800/60 rounded-xl">
+                      <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-pink-400 to-rose-400 flex items-center justify-center text-white font-black text-sm">
+                        {bday.name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()}
+                      </div>
+                      <div className="flex-1">
+                        <p className="text-sm font-black text-slate-900 dark:text-white">{bday.name}</p>
+                        <p className="text-xs text-slate-600 dark:text-slate-400">
+                          {daysUntil === 0 ? 'Hoje' : daysUntil === 1 ? 'Amanhã' : `Em ${daysUntil} dias`}
+                        </p>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        </section>
+      )}
+
+      {/* SEÇÃO: NÚCLEO FINANCEIRO */}
+      <section className="space-y-4">
+        <div className="flex items-center justify-between px-2">
+          <div>
+            <h2 className="text-xl font-black text-slate-900 dark:text-white tracking-tighter">Núcleo Financeiro</h2>
+            <p className="text-xs text-slate-500 dark:text-slate-400">Gestão completa de receitas e despesas</p>
+          </div>
+          <Link 
+            to="/dashboard/finance" 
+            className="flex items-center gap-2 text-sm font-black text-emerald-600 dark:text-emerald-400 hover:text-emerald-700 dark:hover:text-emerald-300 transition-colors"
+          >
+            Ver Completo <ArrowRight className="w-4 h-4" />
+          </Link>
+        </div>
+
+        {/* CARDS DE RESUMO FINANCEIRO */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        {/* Receita do Mês */}
+        <div className="bg-white dark:bg-slate-900 rounded-3xl p-6 border border-slate-200 dark:border-slate-800 shadow-sm hover:shadow-xl transition-all">
+          <p className="text-xs font-black uppercase text-slate-400 tracking-widest mb-2">Receita do Mês</p>
+          <h3 className="text-3xl font-black text-emerald-600 dark:text-emerald-400 mb-2">
+                              <AnimatedNumber 
+                                value={stats.revenue} 
+                                duration={1500}
+                                formatter={(val) => formatCurrency(val)}
+                              />
                             </h3>
-                          </div>
-                          <div className="flex items-center gap-6 pt-8 border-t border-white/5">
-                              <div>
-                                  <p className="text-[9px] font-black text-slate-500 uppercase">Margem Real</p>
-                                  <p className="text-xl font-black text-emerald-400">{stats.margin.toFixed(1)}%</p>
-                              </div>
-                              <div className="h-10 w-px bg-white/5"></div>
-                              <div>
-                                  <p className="text-[9px] font-black text-slate-500 uppercase">Lucro Líquido</p>
-                                  <p className="text-xl font-black text-white">{formatCurrency(stats.profit)}</p>
-                              </div>
+          <div className="flex items-center gap-1 text-xs font-black">
+            {stats.revenueGrowth >= 0 ? (
+              <>
+                <ArrowUpRight className="w-4 h-4 text-emerald-500" />
+                <span className="text-emerald-500">+{stats.revenueGrowth.toFixed(1)}%</span>
+              </>
+            ) : (
+              <>
+                <ArrowDownRight className="w-4 h-4 text-rose-500" />
+                <span className="text-rose-500">{stats.revenueGrowth.toFixed(1)}%</span>
+              </>
+            )}
                           </div>
                       </div>
                       
-                      <div className="md:col-span-5 bg-white/5 backdrop-blur-md rounded-[2.5rem] p-8 border border-white/5 flex flex-col justify-between relative group/meta min-h-[200px]">
-                          <div>
-                              <div className="flex justify-between items-center mb-1">
-                                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Status da Meta</p>
-                                  <button 
-                                    onClick={(e) => { e.preventDefault(); setIsGoalModalOpen(true); }}
-                                    className="p-2 bg-white/10 hover:bg-emerald-500 text-white rounded-xl transition-all scale-90 group-hover/meta:scale-100 opacity-50 group-hover/meta:opacity-100"
-                                    title="Alterar Meta"
-                                  >
-                                    <Edit3 className="w-4 h-4" />
-                                  </button>
-                              </div>
-                              <p className="text-3xl font-black text-indigo-400">{stats.goalPct.toFixed(1)}%</p>
-                          </div>
-                          <div className="space-y-3">
-                              <div className="h-3 bg-white/5 rounded-full overflow-hidden p-0.5">
-                                  <div className="h-full bg-gradient-to-r from-indigo-500 to-emerald-400 rounded-full transition-all duration-1000" style={{ width: `${Math.min(stats.goalPct, 100)}%` }}></div>
-                              </div>
-                              <p className="text-[9px] font-bold text-slate-500 uppercase text-center">Alvo: {formatCurrency(target?.planned_revenue || 0)}</p>
-                          </div>
-                      </div>
-                  </div>
-              </Link>
-
-              <div className="lg:col-span-4 grid grid-cols-1 gap-6">
-                  <Link to="/dashboard/finance/relatorios" className="bg-white dark:bg-slate-900 p-8 rounded-[2.5rem] border border-slate-100 dark:border-slate-800 shadow-sm group hover:shadow-xl transition-all">
-                      <div className="flex justify-between items-start mb-6">
-                          <div className="p-3.5 rounded-2xl bg-indigo-600 text-white shadow-lg"><Gem className="w-5 h-5" /></div>
-                          <span className="text-[10px] font-black uppercase text-slate-300 dark:text-slate-700 tracking-widest">Analytics</span>
-                      </div>
-                      <p className="text-[10px] font-black uppercase text-slate-400 tracking-[0.2em] mb-1">Ticket Médio</p>
-                      <h3 className="text-3xl font-black text-slate-900 dark:text-white tracking-tighter italic">{formatCurrency(stats.ticketMedio)}</h3>
-                  </Link>
-                  <Link to="/dashboard/finance/lancamentos" className="bg-white dark:bg-slate-900 p-8 rounded-[2.5rem] border border-slate-100 dark:border-slate-800 shadow-sm group hover:shadow-xl transition-all">
-                      <div className="flex justify-between items-start mb-6">
-                          <div className="p-3.5 rounded-2xl bg-rose-500 text-white shadow-lg"><Briefcase className="w-5 h-5" /></div>
-                          <span className="text-[10px] font-black uppercase text-slate-300 dark:text-slate-700 tracking-widest">Fluxo</span>
-                      </div>
-                      <p className="text-[10px] font-black uppercase text-slate-400 tracking-[0.2em] mb-1">Custos Operacionais</p>
-                      <h3 className="text-3xl font-black text-slate-900 dark:text-white tracking-tighter italic">{formatCurrency(stats.revenue - stats.profit)}</h3>
-                  </Link>
-              </div>
+        {/* Despesas do Mês */}
+        <div className="bg-white dark:bg-slate-900 rounded-3xl p-6 border border-slate-200 dark:border-slate-800 shadow-sm hover:shadow-xl transition-all">
+          <p className="text-xs font-black uppercase text-slate-400 tracking-widest mb-2">Despesas do Mês</p>
+          <h3 className="text-3xl font-black text-rose-600 dark:text-rose-400 mb-2">
+                        <AnimatedNumber 
+              value={stats.expenses} 
+              duration={1500}
+                          formatter={(val) => formatCurrency(val)}
+                        />
+                      </h3>
+          <div className="flex items-center gap-1 text-xs font-black">
+            {stats.expensesGrowth <= 0 ? (
+              <>
+                <ArrowDownRight className="w-4 h-4 text-emerald-500" />
+                <span className="text-emerald-500">{Math.abs(stats.expensesGrowth).toFixed(1)}%</span>
+              </>
+            ) : (
+              <>
+                <ArrowUpRight className="w-4 h-4 text-rose-500" />
+                <span className="text-rose-500">+{stats.expensesGrowth.toFixed(1)}%</span>
+              </>
+            )}
           </div>
-      </section>
-
-      {/* SEÇÃO 2: RELACIONAMENTO */}
-      <section className="space-y-8">
-          <div className="flex items-end justify-between px-2">
-              <div>
-                  <h3 className="text-xs font-black uppercase tracking-[0.4em] text-rose-600 dark:text-rose-400 mb-2">Ciclos de Vida</h3>
-                  <h2 className="text-4xl font-black text-slate-900 dark:text-white tracking-tighter italic">Encantamento e Vendas</h2>
-              </div>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-              <div className="bg-white dark:bg-slate-900 rounded-[3.5rem] p-10 border border-slate-200 dark:border-slate-800 shadow-sm relative overflow-hidden group">
-                  <div className="absolute top-0 right-0 p-8 opacity-5 group-hover:scale-110 transition-transform"><Cake className="w-32 h-32 text-rose-500" /></div>
-                  <div className="flex items-center gap-5 mb-10">
-                      <div className="w-20 h-20 rounded-[2rem] bg-rose-50 dark:bg-rose-900/20 flex items-center justify-center font-black text-rose-600 text-3xl shadow-inner border border-rose-100 dark:border-rose-800">MJ</div>
-                      <div>
-                          <h3 className="text-2xl font-black text-slate-900 dark:text-white tracking-tighter">Maria Julia</h3>
-                          <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Aniversário: Amanhã</p>
                       </div>
-                  </div>
-                  <button 
-                    onClick={() => setSelectedMimoPatient({ id: 'mj1', name: 'Maria Julia' })}
-                    className="w-full bg-slate-900 dark:bg-white text-white dark:text-slate-900 py-5 rounded-[2rem] font-black text-xs uppercase tracking-widest flex items-center justify-center gap-3 hover:scale-[1.02] active:scale-95 transition-all shadow-xl"
-                  >
-                      Enviar Mimo 🎉
-                  </button>
-              </div>
 
-              <Link to="/dashboard/crm" className="bg-indigo-600 rounded-[3.5rem] p-10 text-white shadow-2xl relative overflow-hidden group transition-all hover:scale-[1.01]">
-                  <div className="absolute top-0 right-0 p-8 opacity-10"><MessageSquare className="w-32 h-32" /></div>
-                  <p className="text-[10px] font-black uppercase tracking-widest opacity-60 mb-2">Leads em Aberto</p>
-                  <h3 className="text-6xl font-black tracking-tighter italic mb-10">{stats.activeLeads}</h3>
-                  <div className="pt-6 border-t border-white/10 flex justify-between items-center">
-                      <span className="text-[10px] font-black uppercase">Responder no WhatsApp</span>
-                      <ArrowRight className="w-5 h-5" />
-                  </div>
-              </Link>
-
-              <Link to="/dashboard/orcamentos" className="bg-white dark:bg-slate-900 rounded-[3.5rem] p-10 border border-slate-200 dark:border-slate-800 shadow-sm relative overflow-hidden group transition-all hover:scale-[1.01]">
-                  <div className="absolute top-0 right-0 p-8 opacity-5"><FileText className="w-32 h-32 text-indigo-600" /></div>
-                  <p className="text-[10px] font-black uppercase text-slate-400 tracking-widest mb-2">Poder de Injeção</p>
-                  <h3 className="text-4xl font-black text-slate-900 dark:text-white tracking-tighter italic mb-8">{formatCurrency(stats.pipelineTotal)}</h3>
-                  <div className="flex items-center gap-3 bg-emerald-50 dark:bg-emerald-900/10 p-4 rounded-2xl border border-emerald-100 dark:border-emerald-800/50">
-                      <Zap className="w-5 h-5 text-emerald-600" />
-                      <p className="text-[9px] font-black text-emerald-700 dark:text-emerald-400 uppercase tracking-widest">Converta orçamentos agora</p>
-                  </div>
-              </Link>
+        {/* Lucro Líquido */}
+        <div className="bg-white dark:bg-slate-900 rounded-3xl p-6 border border-slate-200 dark:border-slate-800 shadow-sm hover:shadow-xl transition-all">
+          <p className="text-xs font-black uppercase text-slate-400 tracking-widest mb-2">Lucro Líquido</p>
+          <h3 className={`text-3xl font-black mb-2 ${stats.profit >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}`}>
+                        <AnimatedNumber 
+              value={stats.profit} 
+              duration={1500}
+                          formatter={(val) => formatCurrency(val)}
+                        />
+                      </h3>
+          <div className="flex items-center gap-1 text-xs font-black">
+            {stats.profitGrowth >= 0 ? (
+              <>
+                <ArrowUpRight className="w-4 h-4 text-emerald-500" />
+                <span className="text-emerald-500">+{stats.profitGrowth.toFixed(1)}%</span>
+              </>
+            ) : (
+              <>
+                <ArrowDownRight className="w-4 h-4 text-rose-500" />
+                <span className="text-rose-500">{stats.profitGrowth.toFixed(1)}%</span>
+              </>
+            )}
           </div>
-      </section>
-
-      {/* MODAL: ALTERAR META - PADRÃO ATM */}
-      {isGoalModalOpen && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-md">
-            <div className="bg-white dark:bg-slate-900 w-full max-w-md rounded-[3rem] shadow-2xl animate-in zoom-in-95 border border-white/10 overflow-hidden">
-                <div className="p-8 border-b bg-slate-50 dark:bg-slate-800/50 flex justify-between items-center">
-                    <div>
-                      <h3 className="text-2xl font-black text-slate-900 dark:text-white tracking-tighter uppercase italic leading-none">Novo Alvo</h3>
-                      <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-2">Defina o faturamento para {monthLabel}</p>
-                    </div>
-                    <button onClick={() => setIsGoalModalOpen(false)} className="p-3 bg-white dark:bg-slate-700 rounded-full text-slate-400 shadow-sm"><X className="w-6 h-6"/></button>
-                </div>
-                <div className="p-8 space-y-6">
-                    <div>
-                        <label className="text-[11px] font-black text-slate-400 uppercase tracking-widest ml-1">Faturamento Desejado</label>
-                        <div className="relative mt-2">
-                            <span className="absolute left-6 top-1/2 -translate-y-1/2 text-slate-400 font-black text-2xl">R$</span>
-                            <input 
-                                type="tel" autoFocus
-                                className="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-3xl py-8 pl-16 pr-8 text-4xl font-black text-slate-900 dark:text-white focus:ring-4 focus:ring-indigo-500/10"
-                                value={goalInput}
-                                onChange={(e) => {
-                                  const raw = e.target.value.replace(/\D/g, '');
-                                  if (raw.length > 12) return;
-                                  const value = Number(raw) / 100;
-                                  setGoalInput(formatCurrencyValue(value));
-                                }}
-                            />
-                        </div>
-                    </div>
-                    <div className="flex gap-3">
-                        <button 
-                            type="button"
-                            onClick={() => setIsGoalModalOpen(false)}
-                            className="flex-1 py-6 rounded-[2rem] font-black text-xs uppercase tracking-widest text-slate-400"
-                        >
-                            Cancelar
-                        </button>
-                        <button 
-                            onClick={handleSaveGoal}
-                            disabled={isSavingGoal}
-                            className="flex-[2] bg-slate-900 dark:bg-white text-white dark:text-slate-900 py-6 rounded-[2rem] font-black text-xs uppercase tracking-[0.2em] shadow-2xl flex items-center justify-center gap-3 active:scale-95 transition-all"
-                        >
-                            {isSavingGoal ? <Loader2 className="w-5 h-5 animate-spin" /> : <><Check className="w-5 h-5" /> Confirmar</>}
-                        </button>
-                    </div>
-                </div>
-            </div>
         </div>
-      )}
 
-      {/* MODAL: SELEÇÃO DE MIMO */}
-      {selectedMimoPatient && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-md">
-            <div className="bg-white dark:bg-slate-900 w-full max-w-lg rounded-[4rem] shadow-2xl animate-in zoom-in-95 border border-white/10 overflow-hidden relative">
-                {mimoSent ? (
-                  <div className="p-20 text-center flex flex-col items-center justify-center animate-in fade-in duration-500">
-                      <div className="w-24 h-24 bg-emerald-100 dark:bg-emerald-900/30 rounded-full flex items-center justify-center mb-6">
-                        <Check className="w-12 h-12 text-emerald-600" />
+        {/* Agendamentos Hoje */}
+        <div className="bg-white dark:bg-slate-900 rounded-3xl p-6 border border-slate-200 dark:border-slate-800 shadow-sm hover:shadow-xl transition-all">
+          <p className="text-xs font-black uppercase text-slate-400 tracking-widest mb-2">Agendamentos Hoje</p>
+          <h3 className="text-3xl font-black text-slate-900 dark:text-white mb-2">
+            {isLoading ? '...' : stats.totalToday}
+          </h3>
+          <p className="text-xs font-black text-slate-500">
+            {stats.confirmedToday} confirmados
+          </p>
+        </div>
+        </div>
+      </section>
+
+      {/* SEÇÃO: TIMELINE DO DIA */}
+      <section className="space-y-4">
+        <div className="flex items-center justify-between px-2">
+          <div>
+            <h2 className="text-xl font-black text-slate-900 dark:text-white tracking-tighter flex items-center gap-2">
+              <Clock className="w-5 h-5 text-indigo-600" />
+              Agenda de Hoje
+            </h2>
+            <p className="text-xs text-slate-500 dark:text-slate-400">Timeline dos seus agendamentos</p>
+          </div>
+          <Link 
+            to="/dashboard/agenda" 
+            className="text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 transition-colors text-sm font-black"
+          >
+            Ver agenda completa <ArrowRight className="w-4 h-4 inline ml-1" />
+          </Link>
+        </div>
+
+        <div className="bg-white dark:bg-slate-900 rounded-3xl p-6 border border-slate-200 dark:border-slate-800 shadow-sm">
+          {isLoading ? (
+            <SkeletonAppointmentCards count={4} />
+          ) : upcomingAppointments.length === 0 ? (
+            <EmptyState 
+              icon="calendar"
+              title="Agenda Livre!"
+              description="Nenhum agendamento pendente para hoje."
+              className="py-8"
+            />
+          ) : (
+            <div className="relative">
+              {/* Linha vertical da timeline */}
+              <div className="absolute left-6 top-0 bottom-0 w-0.5 bg-gradient-to-b from-indigo-200 via-indigo-400 to-indigo-200 dark:from-indigo-800 dark:via-indigo-600 dark:to-indigo-800"></div>
+              
+              <div className="space-y-6">
+                {upcomingAppointments.map((appt, idx) => {
+                  const startTime = new Date(appt.startTime);
+                  const now = new Date();
+                  const isPast = startTime < now;
+                  const initials = appt.patientName.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase();
+                  
+                  return (
+                    <Link
+                      key={appt.id}
+                      to="/dashboard/agenda"
+                      state={{ appointmentId: appt.id }}
+                      className="relative flex items-start gap-4 hover:bg-slate-50 dark:hover:bg-slate-800 rounded-2xl p-3 -ml-3 transition-all cursor-pointer group"
+                    >
+                      {/* Ponto na timeline */}
+                      <div className={`relative z-10 w-12 h-12 rounded-xl flex items-center justify-center font-black text-sm shadow-lg ${getStatusStyle(appt.status)} ${isPast ? 'opacity-60' : ''} group-hover:scale-110 transition-transform`}>
+                        {initials}
                       </div>
-                      <h3 className="text-3xl font-black tracking-tighter italic uppercase mb-2">Estratégia Aplicada!</h3>
-                      <p className="text-slate-500 font-bold uppercase text-[10px] tracking-widest">O mimo foi enviado para o WhatsApp do paciente</p>
-                  </div>
-                ) : (
-                  <>
-                    <div className="p-12 border-b bg-slate-50 dark:bg-slate-800/50 flex justify-between items-center">
-                        <div>
-                          <h3 className="text-2xl font-black text-slate-900 dark:text-white tracking-tighter uppercase italic leading-none">Estratégia de Encanto</h3>
-                          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-2">Escolha o presente para {selectedMimoPatient.name}</p>
+                      
+                      {/* Conteúdo */}
+                      <div className="flex-1 min-w-0 pt-1">
+                        <div className="flex items-start justify-between gap-4 mb-2">
+                          <div className="flex-1 min-w-0">
+                            <h4 className={`text-sm font-black truncate ${isPast ? 'text-slate-500 dark:text-slate-400' : 'text-slate-900 dark:text-white'} group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors`}>
+                              {appt.patientName}
+                            </h4>
+                            <p className="text-xs font-bold text-slate-500 truncate mt-1">{appt.serviceName}</p>
+                          </div>
+                          <div className="text-right shrink-0">
+                            <p className={`text-sm font-black ${isPast ? 'text-slate-400' : 'text-slate-900 dark:text-white'}`}>
+                              {startTime.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                            </p>
+                            {!isPast && idx === 0 && (
+                              <span className="inline-block mt-1 px-2 py-0.5 rounded-full text-[9px] font-black uppercase bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300">
+                                Próximo
+                              </span>
+                            )}
+                          </div>
                         </div>
-                        <button onClick={() => setSelectedMimoPatient(null)} className="p-4 bg-white dark:bg-slate-700 rounded-full text-slate-400 shadow-sm"><X className="w-6 h-6"/></button>
-                    </div>
+                        <span className={`inline-block px-2 py-1 rounded-full text-[10px] font-black uppercase ${getStatusStyle(appt.status)}`}>
+                          {getStatusLabel(appt.status)}
+                        </span>
+                      </div>
+                    </Link>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+        </div>
+      </section>
+
+      {/* SEÇÃO: ÚLTIMAS TRANSAÇÕES */}
+      <section className="space-y-4">
+        <div className="flex items-center justify-between px-2">
+          <div>
+            <h2 className="text-xl font-black text-slate-900 dark:text-white tracking-tighter">Atividade Recente</h2>
+            <p className="text-xs text-slate-500 dark:text-slate-400">Últimas movimentações financeiras</p>
+          </div>
+        </div>
+
+        <div className="bg-white dark:bg-slate-900 rounded-3xl p-6 border border-slate-200 dark:border-slate-800 shadow-sm">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-lg font-black text-slate-900 dark:text-white">Últimas Transações</h3>
+            <Link 
+              to="/dashboard/finance/lancamentos" 
+              className="text-rose-600 dark:text-rose-400 hover:text-rose-700 transition-colors"
+            >
+              Ver todas <ArrowRight className="w-4 h-4 inline ml-1" />
+            </Link>
+          </div>
+          {latestTransactions.length === 0 ? (
+            <EmptyState 
+              icon="wallet"
+              title="Nenhuma transação"
+              description="Comece registrando suas receitas e despesas."
+              action={{
+                label: 'Nova Transação',
+                onClick: onOpenTransactionModal
+              }}
+              className="py-8"
+            />
+          ) : (
+            <div className="space-y-3">
+              {latestTransactions.map((tx) => (
+                <div 
+                  key={tx.id}
+                  className="flex items-center justify-between p-4 bg-slate-50 dark:bg-slate-800 rounded-2xl hover:bg-slate-100 dark:hover:bg-slate-700 transition-all"
+                >
+                  <div className="flex-1 min-w-0">
+                    <h4 className="text-sm font-black text-slate-900 dark:text-white truncate">
+                      {tx.description}
+                    </h4>
+                    <p className="text-xs font-bold text-slate-500">
+                      {formatTransactionDate(tx.date)}, {formatTransactionTime(tx.date)}
+                    </p>
+                  </div>
+                  <div className="text-right">
+                    <p className={`text-lg font-black ${tx.type === 'revenue' ? 'text-emerald-600' : 'text-rose-600'}`}>
+                      {tx.type === 'revenue' ? '+' : '-'}{formatCurrency(tx.amount)}
+                    </p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </section>
+
                     
-                    <div className="p-10 space-y-4">
-                        <button 
-                          onClick={() => handleSendMimo('gift')}
-                          disabled={isSendingMimo}
-                          className="w-full flex items-center justify-between p-6 bg-rose-50 dark:bg-rose-900/10 border-2 border-rose-100 dark:border-rose-900/30 rounded-[2.5rem] group hover:border-rose-500 transition-all text-left"
-                        >
-                            <div className="flex items-center gap-5">
-                                <div className="p-4 bg-white dark:bg-slate-800 rounded-2xl shadow-sm text-rose-500 group-hover:scale-110 transition-transform"><Gift className="w-8 h-8" /></div>
-                                <div>
-                                    <h4 className="font-black text-rose-900 dark:text-rose-100 text-lg uppercase italic tracking-tighter">Mimo Físico/Cortesia</h4>
-                                    <p className="text-xs font-bold text-rose-600/70">Gera altíssimo valor e recorrência</p>
-                                </div>
-                            </div>
-                            <Send className="w-6 h-6 text-rose-400 group-hover:translate-x-1 transition-transform" />
-                        </button>
-
-                        <button 
-                          onClick={() => handleSendMimo('discount')}
-                          disabled={isSendingMimo}
-                          className="w-full flex items-center justify-between p-6 bg-indigo-50 dark:bg-indigo-900/10 border-2 border-indigo-100 dark:border-indigo-900/30 rounded-[2.5rem] group hover:border-indigo-500 transition-all text-left"
-                        >
-                            <div className="flex items-center gap-5">
-                                <div className="p-4 bg-white dark:bg-slate-800 rounded-2xl shadow-sm text-indigo-500 group-hover:scale-110 transition-transform"><Percent className="w-8 h-8" /></div>
-                                <div>
-                                    <h4 className="font-black text-indigo-900 dark:text-indigo-100 text-lg uppercase italic tracking-tighter">Cupom de Aniversário</h4>
-                                    <p className="text-xs font-bold text-indigo-600/70">Ideal para conversão de vendas</p>
-                                </div>
-                            </div>
-                            <Send className="w-6 h-6 text-indigo-400 group-hover:translate-x-1 transition-transform" />
-                        </button>
-
-                        <button 
-                          onClick={() => handleSendMimo('vip')}
-                          disabled={isSendingMimo}
-                          className="w-full flex items-center justify-between p-6 bg-slate-900 rounded-[2.5rem] group transition-all text-left"
-                        >
-                            <div className="flex items-center gap-5">
-                                <div className="p-4 bg-white/10 rounded-2xl text-emerald-400 group-hover:scale-110 transition-transform"><Sparkles className="w-8 h-8" /></div>
-                                <div>
-                                    <h4 className="font-black text-white text-lg uppercase italic tracking-tighter">Upgrade VIP</h4>
-                                    <p className="text-xs font-bold text-slate-500">Convite para evento ou kit especial</p>
-                                </div>
-                            </div>
-                            <Send className="w-6 h-6 text-emerald-500 group-hover:translate-x-1 transition-transform" />
-                        </button>
-                    </div>
-                  </>
-                )}
-            </div>
+      {/* SEÇÃO: AÇÕES RÁPIDAS INTELIGENTES */}
+      <section className="space-y-4">
+        <div className="flex items-center justify-between px-2">
+          <div>
+            <h2 className="text-xl font-black text-slate-900 dark:text-white tracking-tighter flex items-center gap-2">
+              <Zap className="w-5 h-5 text-amber-500" />
+              Ações Rápidas
+            </h2>
+            <p className="text-xs text-slate-500 dark:text-slate-400">Acesso rápido às principais funcionalidades</p>
+          </div>
         </div>
-      )}
+
+        <div className="bg-white dark:bg-slate-900 rounded-3xl p-6 border border-slate-200 dark:border-slate-800 shadow-sm">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <button
+            onClick={onOpenTransactionModal}
+            className="flex flex-col items-center justify-center gap-3 p-6 bg-gradient-to-br from-emerald-600 to-emerald-700 text-white rounded-2xl hover:from-emerald-700 hover:to-emerald-800 transition-all shadow-lg hover:shadow-xl hover:scale-105 group"
+          >
+            <Plus className="w-6 h-6 group-hover:rotate-90 transition-transform" />
+            <span className="text-sm font-black uppercase tracking-wider">Nova Transação</span>
+          </button>
+          <button 
+            onClick={() => navigate('/dashboard/agenda')}
+            className="flex flex-col items-center justify-center gap-3 p-6 bg-gradient-to-br from-indigo-600 to-indigo-700 text-white rounded-2xl hover:from-indigo-700 hover:to-indigo-800 transition-all shadow-lg hover:shadow-xl hover:scale-105 group"
+          >
+            <Calendar className="w-6 h-6 group-hover:scale-110 transition-transform" />
+            <span className="text-sm font-black uppercase tracking-wider">Novo Agendamento</span>
+          </button>
+          <button 
+            onClick={() => navigate('/dashboard/pacientes')}
+            className="flex flex-col items-center justify-center gap-3 p-6 bg-gradient-to-br from-blue-600 to-blue-700 text-white rounded-2xl hover:from-blue-700 hover:to-blue-800 transition-all shadow-lg hover:shadow-xl hover:scale-105 group"
+          >
+            <Users className="w-6 h-6 group-hover:scale-110 transition-transform" />
+            <span className="text-sm font-black uppercase tracking-wider">Novo Paciente</span>
+          </button>
+          <button 
+            onClick={() => navigate('/dashboard/crm')}
+            className="flex flex-col items-center justify-center gap-3 p-6 bg-gradient-to-br from-purple-600 to-purple-700 text-white rounded-2xl hover:from-purple-700 hover:to-purple-800 transition-all shadow-lg hover:shadow-xl hover:scale-105 group"
+          >
+            <MessageSquare className="w-6 h-6 group-hover:scale-110 transition-transform" />
+            <span className="text-sm font-black uppercase tracking-wider">Abrir CRM</span>
+          </button>
+        </div>
+      </div>
+      </section>
     </div>
   );
 };
 
-export default HomeTab;
+export default React.memo(HomeTab);

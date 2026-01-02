@@ -1,29 +1,48 @@
 
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { Transaction } from '../../../types';
 import { formatCurrency } from '../../../utils/formatters';
-import { Search, Edit2, Trash2, ArrowUpRight, ArrowDownRight, Download, Calendar, List, X, Tag, Info } from 'lucide-react';
+import { Search, Edit2, Trash2, ArrowUpRight, ArrowDownRight, Download, Calendar, List, X, Tag, Info, Plus } from 'lucide-react';
 import * as XLSX from 'xlsx';
+import EmptyState from '../../ui/EmptyState';
+import { SkeletonTransactionsList } from '../../ui/Skeleton';
+import Pagination from '../../ui/Pagination';
 
 interface TransactionsTabProps {
   transactions: Transaction[];
   onEdit: (t: Transaction) => void;
   onDelete: (id: string) => void;
+  onAdd?: () => void;
 }
 
-const TransactionsTab: React.FC<TransactionsTabProps> = ({ transactions, onEdit, onDelete }) => {
+const TransactionsTab: React.FC<TransactionsTabProps> = ({ transactions, onEdit, onDelete, onAdd }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [viewMode, setViewMode] = useState<'list' | 'calendar'>('list');
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(20);
 
-  const filtered = transactions.filter(t => {
-    const matchesSearch = t.description.toLowerCase().includes(searchTerm.toLowerCase()) || 
-                          t.category.toLowerCase().includes(searchTerm.toLowerCase());
-    return matchesSearch;
-  });
+  const filtered = useMemo(() => {
+    return transactions.filter(t => {
+      const matchesSearch = t.description.toLowerCase().includes(searchTerm.toLowerCase()) || 
+                            t.category.toLowerCase().includes(searchTerm.toLowerCase());
+      return matchesSearch;
+    });
+  }, [transactions, searchTerm]);
+
+  const paginatedTransactions = useMemo(() => {
+    const startIndex = (currentPage - 1) * itemsPerPage;
+    const endIndex = startIndex + itemsPerPage;
+    return filtered.slice(startIndex, endIndex);
+  }, [filtered, currentPage, itemsPerPage]);
+
+  // Resetar para primeira página quando o filtro mudar
+  React.useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm]);
 
   const handleExport = () => {
-    const dataToExport = transactions.map(t => ({
+    const dataToExport = filtered.map(t => ({
       Data: new Date(t.date).toLocaleDateString('pt-BR'),
       Descrição: t.description,
       Categoria: t.category,
@@ -100,14 +119,36 @@ const TransactionsTab: React.FC<TransactionsTabProps> = ({ transactions, onEdit,
           </div>
         </div>
 
-        {viewMode === 'calendar' ? <div className="p-6 bg-slate-50 dark:bg-slate-950">{renderCalendarView()}</div> : (
+        {viewMode === 'calendar' ? <div className="p-6 bg-slate-50 dark:bg-slate-950">{transactions.length === 0 ? (
+            <EmptyState 
+              icon="calendar" 
+              title="Nenhum lançamento no mês" 
+              description="O calendário financeiro está vazio. Registre suas receitas e despesas para visualizar o fluxo de caixa."
+              action={onAdd ? { label: 'Adicionar Lançamento', onClick: onAdd } : undefined}
+            />
+          ) : renderCalendarView()}</div> : (
             <div className="overflow-x-auto">
+                {filtered.length === 0 && transactions.length === 0 ? (
+                  <EmptyState 
+                    icon="chart" 
+                    title="Comece a registrar seu fluxo de caixa" 
+                    description="Você ainda não possui lançamentos financeiros. Adicione receitas e despesas para acompanhar a saúde financeira da sua clínica."
+                    action={onAdd ? { label: 'Primeiro Lançamento', onClick: onAdd } : undefined}
+                  />
+                ) : filtered.length === 0 && searchTerm ? (
+                  <EmptyState 
+                    icon="search" 
+                    title="Nenhum lançamento encontrado" 
+                    description={`Não encontramos lançamentos para "${searchTerm}". Verifique a descrição ou categoria buscada.`}
+                    action={{ label: 'Limpar Busca', onClick: () => setSearchTerm('') }}
+                  />
+                ) : (
                 <table className="w-full text-sm text-left">
                     <thead className="bg-slate-50 dark:bg-slate-800/50 text-slate-500 font-black uppercase text-[10px] tracking-widest">
                         <tr><th className="px-8 py-5">Data</th><th className="px-8 py-5">Descrição</th><th className="px-8 py-5">Categoria</th><th className="px-8 py-5 text-right">Valor</th><th className="px-8 py-5 text-center">Ações</th></tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                        {filtered.map(t => (
+                        {paginatedTransactions.map(t => (
                             <tr 
                               key={t.id} 
                               onClick={() => onEdit(t)}
@@ -141,7 +182,21 @@ const TransactionsTab: React.FC<TransactionsTabProps> = ({ transactions, onEdit,
                         ))}
                     </tbody>
                 </table>
+                )}
             </div>
+        )}
+        {viewMode === 'list' && filtered.length > 0 && (
+          <Pagination
+            currentPage={currentPage}
+            totalPages={Math.ceil(filtered.length / itemsPerPage)}
+            itemsPerPage={itemsPerPage}
+            totalItems={filtered.length}
+            onPageChange={setCurrentPage}
+            onItemsPerPageChange={(newItemsPerPage) => {
+              setItemsPerPage(newItemsPerPage);
+              setCurrentPage(1);
+            }}
+          />
         )}
       </div>
 

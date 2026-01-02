@@ -1,0 +1,37 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 192 192">
+  <defs>
+    <linearGradient id="bg-gradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#10b981"/>
+      <stop offset="100%" style="stop-color:#059669"/>
+    </linearGradient>
+  </defs>
+  
+  <!-- Background -->
+  <rect width="192" height="192" rx="40" fill="url(#bg-gradient)"/>
+  
+  <!-- WhatsApp-style chat bubble -->
+  <g fill="white">
+    <!-- Main chat bubble -->
+    <path d="M96 36 
+             C130 36 158 60 158 90 
+             C158 120 130 144 96 144 
+             C88 144 80 143 73 140 
+             L48 154 L54 130 
+             C42 120 34 106 34 90 
+             C34 60 62 36 96 36 Z"/>
+    
+    <!-- Phone icon inside bubble -->
+    <path d="M80 72 C80 70 82 68 84 68 L90 68 C92 68 94 70 94 72 L94 75 L98 75 L98 72 C98 70 100 68 102 68 L108 68 C110 68 112 70 112 72 L112 108 C112 110 110 112 108 112 L84 112 C82 112 80 110 80 108 Z M86 78 L86 82 C86 84 88 86 90 86 L102 86 C104 86 106 84 106 82 L106 78 Z M90 94 L102 94 L102 102 L90 102 Z" 
+          fill="#10b981"/>
+  </g>
+</svg>
+
+
+
+
+
+
+
+
+
+

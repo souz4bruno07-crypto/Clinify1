@@ -1,9 +1,12 @@
 
 import React, { useState, useEffect } from 'react';
-import { getStaff, addStaff, deleteStaff, updateStaff } from '../../services/supabaseService';
+import { getStaff, addStaff, deleteStaff, updateStaff } from '../../services/backendService';
 import { Staff } from '../../types';
 import { formatPhone } from '../../utils/formatters';
 import { Plus, Trash2, X, Save, User, Edit2, CheckCircle2, ShieldCheck } from 'lucide-react';
+import { useToast } from '../../contexts/ToastContext';
+import { useConfirmDialog } from '../ui/ConfirmDialog';
+import EmptyState from '../ui/EmptyState';
 
 const COLORS = [
     { bg: 'bg-blue-100', text: 'text-blue-700', ring: 'ring-blue-500' },
@@ -15,6 +18,8 @@ const COLORS = [
 ];
 
 const StaffTab: React.FC<{ user: any }> = ({ user }) => {
+  const toast = useToast();
+  const { confirm } = useConfirmDialog();
   const [staffList, setStaffList] = useState<Staff[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -71,21 +76,34 @@ const StaffTab: React.FC<{ user: any }> = ({ user }) => {
               phone: formData.phone
           };
 
-          if (editingId) await updateStaff(editingId, payload);
-          else await addStaff(payload);
+          if (editingId) {
+              await updateStaff(editingId, payload);
+              toast.success('Dados atualizados!', 3000);
+          } else {
+              await addStaff(payload);
+              toast.success('Profissional salvo com sucesso!', 3000);
+          }
           
           setIsModalOpen(false);
           loadStaff();
       } catch (error: any) {
-          alert("Erro ao salvar");
+          toast.error("Erro ao salvar");
       } finally {
           setIsLoading(false);
       }
   };
 
   const handleDelete = async (id: string) => {
-      if(window.confirm("Remover profissional?")) {
+      const confirmed = await confirm({
+          title: 'Remover Profissional',
+          message: 'Deseja remover este profissional da equipe?',
+          confirmText: 'Remover',
+          cancelText: 'Cancelar',
+          variant: 'danger'
+      });
+      if(confirmed) {
           await deleteStaff(id);
+          toast.success('Item excluído!', 3000);
           loadStaff();
       }
   };
@@ -105,44 +123,56 @@ const StaffTab: React.FC<{ user: any }> = ({ user }) => {
               </button>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {staffList.map(s => (
-                  <div key={s.id} className="bg-white dark:bg-slate-900 p-6 rounded-3xl shadow-sm border border-slate-200 dark:border-slate-800 relative group hover:shadow-md transition-all">
-                      <div className="absolute top-4 right-4 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                          <button onClick={() => openModal(s)} className="p-2 text-slate-400 hover:text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-xl"><Edit2 className="w-4 h-4" /></button>
-                          <button onClick={() => handleDelete(s.id)} className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-xl"><Trash2 className="w-4 h-4" /></button>
-                      </div>
+          {staffList.length === 0 ? (
+            <EmptyState 
+              icon="users"
+              title="Nenhum profissional cadastrado"
+              description="Comece adicionando profissionais à sua equipe. Configure nomes, cargos, comissões e informações de contato."
+              action={{
+                label: 'Adicionar Primeiro Profissional',
+                onClick: () => openModal()
+              }}
+            />
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {staffList.map(s => (
+                    <div key={s.id} className="bg-white dark:bg-slate-900 p-6 rounded-3xl shadow-sm border border-slate-200 dark:border-slate-800 relative group hover:shadow-md transition-all">
+                        <div className="absolute top-4 right-4 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                            <button onClick={() => openModal(s)} className="p-2 text-slate-400 hover:text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-xl"><Edit2 className="w-4 h-4" /></button>
+                            <button onClick={() => handleDelete(s.id)} className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-xl"><Trash2 className="w-4 h-4" /></button>
+                        </div>
 
-                      <div className="flex items-center gap-4">
-                          <div className={`w-14 h-14 rounded-2xl flex items-center justify-center text-xl font-bold ${s.color}`}>
-                              {s.name.charAt(0)}
-                          </div>
-                          <div>
-                              <h3 className="font-bold text-slate-900 dark:text-white text-lg">{s.name}</h3>
-                              <span className="text-xs font-bold text-slate-400 uppercase tracking-widest">{s.role}</span>
-                          </div>
-                      </div>
+                        <div className="flex items-center gap-4">
+                            <div className={`w-14 h-14 rounded-2xl flex items-center justify-center text-xl font-bold ${s.color}`}>
+                                {s.name.charAt(0)}
+                            </div>
+                            <div>
+                                <h3 className="font-bold text-slate-900 dark:text-white text-lg">{s.name}</h3>
+                                <span className="text-xs font-bold text-slate-400 uppercase tracking-widest">{s.role}</span>
+                            </div>
+                        </div>
 
-                      <div className="mt-6 pt-4 border-t border-slate-50 dark:border-slate-800 flex justify-between items-center">
-                          <div>
-                              <p className="text-[10px] font-black text-slate-400 uppercase">Comissão</p>
-                              <p className="text-lg font-bold text-emerald-600">{s.commissionRate}%</p>
-                          </div>
-                          <div className="text-right">
-                              <p className="text-[10px] font-black text-slate-400 uppercase">Contato</p>
-                              <p className="text-xs font-bold text-slate-900 dark:text-white">{s.phone || '-'}</p>
-                          </div>
-                      </div>
-                  </div>
-              ))}
-              <button 
-                  onClick={() => openModal()}
-                  className="border-2 border-dashed border-slate-200 dark:border-slate-800 rounded-3xl p-6 flex flex-col items-center justify-center text-slate-400 hover:border-emerald-500 hover:text-emerald-600 transition-all min-h-[160px]"
-              >
-                  <Plus className="w-8 h-8 mb-2" />
-                  <span className="font-bold text-sm">Adicionar Membro</span>
-              </button>
-          </div>
+                        <div className="mt-6 pt-4 border-t border-slate-50 dark:border-slate-800 flex justify-between items-center">
+                            <div>
+                                <p className="text-[10px] font-black text-slate-400 uppercase">Comissão</p>
+                                <p className="text-lg font-bold text-emerald-600">{s.commissionRate}%</p>
+                            </div>
+                            <div className="text-right">
+                                <p className="text-[10px] font-black text-slate-400 uppercase">Contato</p>
+                                <p className="text-xs font-bold text-slate-900 dark:text-white">{s.phone || '-'}</p>
+                            </div>
+                        </div>
+                    </div>
+                ))}
+                <button 
+                    onClick={() => openModal()}
+                    className="border-2 border-dashed border-slate-200 dark:border-slate-800 rounded-3xl p-6 flex flex-col items-center justify-center text-slate-400 hover:border-emerald-500 hover:text-emerald-600 transition-all min-h-[160px]"
+                >
+                    <Plus className="w-8 h-8 mb-2" />
+                    <span className="font-bold text-sm">Adicionar Membro</span>
+                </button>
+            </div>
+          )}
 
           {isModalOpen && (
                <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-md">

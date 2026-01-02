@@ -6,7 +6,9 @@ import {
   ArrowDownCircle, ArrowUpCircle, Info, 
   AlertCircle, Loader2, Filter
 } from 'lucide-react';
-import { addCategory, updateCategory, deleteCategory } from '../../../services/supabaseService';
+import { addCategory, updateCategory, deleteCategory } from '../../../services/backendService';
+import { useToast } from '../../../contexts/ToastContext';
+import { useConfirmDialog } from '../../ui/ConfirmDialog';
 
 interface CategoriesTabProps {
   categories: Category[];
@@ -15,6 +17,8 @@ interface CategoriesTabProps {
 }
 
 const CategoriesTab: React.FC<CategoriesTabProps> = ({ categories, user, onRefresh }) => {
+  const toast = useToast();
+  const { confirm } = useConfirmDialog();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [editingCategory, setEditingCategory] = useState<Category | null>(null);
@@ -49,18 +53,27 @@ const CategoriesTab: React.FC<CategoriesTabProps> = ({ categories, user, onRefre
           userId: user.id
         });
       }
+      toast.success(editingCategory ? 'Dados atualizados!' : 'Categoria salva com sucesso!', 3000);
       onRefresh();
       setIsModalOpen(false);
     } catch (error) {
-      console.error(error);
+      toast.error('Erro ao salvar categoria');
     } finally {
       setIsSubmitting(false);
     }
   };
 
   const handleDelete = async (id: string) => {
-    if (window.confirm("Tem certeza? Isso pode afetar a exibição de lançamentos antigos vinculados a esta categoria.")) {
+    const confirmed = await confirm({
+      title: 'Excluir Categoria',
+      message: 'Tem certeza? Isso pode afetar a exibição de lançamentos antigos vinculados a esta categoria.',
+      confirmText: 'Excluir',
+      cancelText: 'Cancelar',
+      variant: 'warning'
+    });
+    if (confirmed) {
       await deleteCategory(id);
+      toast.success('Item excluído!', 3000);
       onRefresh();
     }
   };

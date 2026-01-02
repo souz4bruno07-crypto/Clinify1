@@ -15,6 +15,8 @@ import PricingTab from './PricingTab';
 import LaboratoryTab from './LaboratoryTab';
 import CategoriesTab from './CategoriesTab';
 import { formatCurrencyValue, parseCurrencyInput } from '../../../utils/formatters';
+import { useToast } from '../../../contexts/ToastContext';
+import { useConfirmDialog } from '../../ui/ConfirmDialog';
 
 interface FinanceMainProps {
   transactions: any[];
@@ -36,6 +38,8 @@ interface FinanceMainProps {
 
 const FinanceMain: React.FC<FinanceMainProps> = (props) => {
   const { subtab } = useParams();
+  const toast = useToast();
+  const { confirm } = useConfirmDialog();
   const activeSubTab = subtab || 'dashboard';
   const [isTargetModalOpen, setIsTargetModalOpen] = useState(false);
   const [localGoal, setLocalGoal] = useState('');
@@ -156,7 +160,7 @@ const FinanceMain: React.FC<FinanceMainProps> = (props) => {
                 className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all whitespace-nowrap ${
                   isActive 
                     ? 'bg-slate-900 text-white dark:bg-white dark:text-slate-900 shadow-md' 
-                    : 'text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800'
+                    : 'text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-white'
                 }`}
               >
                 <Icon className={`w-3.5 h-3.5 shrink-0 ${isActive ? '' : 'opacity-50'}`} />
@@ -170,7 +174,27 @@ const FinanceMain: React.FC<FinanceMainProps> = (props) => {
         {(() => {
           switch (activeSubTab) {
             case 'dashboard': return <OverviewTab transactions={monthlyTransactions} isLoading={props.isLoading} user={props.user} aiAnalysis={props.aiAnalysis} loadingAnalysis={false} onRefreshAI={props.onRefreshAI} startDate={props.startDate} monthlyGoal={props.monthlyGoal} monthlyBudget={props.monthlyBudget} isTargetLoading={props.isTargetLoading} />;
-            case 'lancamentos': return <TransactionsTab transactions={monthlyTransactions} onEdit={props.onOpenTransactionModal} onDelete={async (id) => { if(window.confirm("Excluir?")) { const { deleteTransaction } = await import('../../../services/supabaseService'); await deleteTransaction(id); props.refreshData(); } }} />;
+            case 'lancamentos': return <TransactionsTab transactions={monthlyTransactions} onEdit={props.onOpenTransactionModal} onDelete={async (id) => { 
+              const confirmed = await confirm({
+                title: 'Excluir Lançamento',
+                message: 'Deseja excluir este lançamento?',
+                confirmText: 'Excluir',
+                cancelText: 'Cancelar',
+                variant: 'danger'
+              });
+              if(confirmed) { 
+                try {
+                  const { deleteTransaction } = await import('../../../services/backendService'); 
+                  await deleteTransaction(id); 
+                  toast.success('Item excluído!', 3000);
+                  props.refreshData(); 
+                } catch (error: any) {
+                  console.error('[FinanceMain] Erro ao deletar transação:', error);
+                  const errorMessage = error?.message || error?.response?.data?.error || 'Erro ao deletar transação';
+                  toast.error(errorMessage, 5000);
+                }
+              } 
+            }} />;
             case 'dre': return <DRETab transactions={monthlyTransactions} onEditTransaction={props.onOpenTransactionModal} user={props.user} startDate={props.startDate} />;
             case 'precificacao': return <PricingTab transactions={props.transactions} />; 
             case 'laboratorio': return <LaboratoryTab transactions={monthlyTransactions} />;

@@ -1,14 +1,17 @@
 
 import React, { useState, useEffect, useRef, useLayoutEffect, useMemo } from 'react';
 import { Quote, Patient, QuoteItem, QuoteMapPoint, Transaction } from '../../types';
-import { getQuotes, addQuote, updateQuote, deleteQuote, getPatients, sendMessage, getTransactions } from '../../services/supabaseService';
+import { getQuotes, addQuote, updateQuote, deleteQuote, getPatients, sendMessage, getTransactions } from '../../services/backendService';
 import { 
   Plus, Search, FileText, Send, Trash2, Edit2, CheckCircle2, 
   MapPin, PenTool, Eraser, DollarSign, Calendar, ChevronRight,
   Info, Sparkles, X, Save, RefreshCw, Syringe, Calculator, Clock,
-  Percent, ArrowRight, Landmark, CreditCard, Zap
+  Percent, ArrowRight, Landmark, CreditCard, Zap, Download, Loader2
 } from 'lucide-react';
 import { formatCurrency } from '../../utils/formatters';
+import { jsPDF } from 'jspdf';
+import { useToast } from '../../contexts/ToastContext';
+import { useConfirmDialog } from '../ui/ConfirmDialog';
 
 // --- SUB-COMPONENTE: CALCULADORA DE PREÇO (IMPLEMENTAÇÃO 6) ---
 const PriceCalculator: React.FC<{ transactions: Transaction[] }> = ({ transactions }) => {
@@ -180,6 +183,8 @@ const PriceCalculator: React.FC<{ transactions: Transaction[] }> = ({ transactio
 
 // --- COMPONENTE PRINCIPAL (ATUALIZADO) ---
 const BudgetsTab: React.FC<{ user: any }> = ({ user }) => {
+  const toast = useToast();
+  const { confirm } = useConfirmDialog();
   const [quotes, setQuotes] = useState<Quote[]>([]);
   const [patients, setPatients] = useState<Patient[]>([]);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
@@ -197,12 +202,17 @@ const BudgetsTab: React.FC<{ user: any }> = ({ user }) => {
   const [activeTool, setActiveTool] = useState<'botox' | 'filler' | 'threads' | 'eraser'>('botox');
   const [newItem, setNewItem] = useState({ procedure: '', region: '', quantity: 1, unitPrice: 0 });
   const [priceInput, setPriceInput] = useState('');
+  const [isExportingPdf, setIsExportingPdf] = useState(false);
 
   useEffect(() => {
       if(user) {
           getQuotes(user.id).then(setQuotes);
-          getPatients(user.id).then(setPatients);
-          getTransactions(user.id).then(setTransactions);
+          getPatients(user.id).then(response => {
+              setPatients(Array.isArray(response) ? response : (response?.data || []));
+          });
+          getTransactions(user.id).then(response => {
+              setTransactions(Array.isArray(response) ? response : (response?.data || []));
+          });
       }
   }, [user]);
 
@@ -222,7 +232,35 @@ const BudgetsTab: React.FC<{ user: any }> = ({ user }) => {
   };
 
   const handleEdit = (quote: Quote) => {
-      setEditingQuote(quote);
+      // Garantir que items seja sempre um array (pode vir como string JSON do banco)
+      let items: QuoteItem[] = [];
+      if (Array.isArray(quote.items)) {
+          items = quote.items;
+      } else if (typeof quote.items === 'string') {
+          try {
+              items = JSON.parse(quote.items);
+          } catch {
+              items = [];
+          }
+      }
+      
+      // Garantir que mapPoints também seja um array
+      let mapPoints: QuoteMapPoint[] = [];
+      if (Array.isArray(quote.mapPoints)) {
+          mapPoints = quote.mapPoints;
+      } else if (typeof quote.mapPoints === 'string') {
+          try {
+              mapPoints = JSON.parse(quote.mapPoints);
+          } catch {
+              mapPoints = [];
+          }
+      }
+      
+      setEditingQuote({
+          ...quote,
+          items,
+          mapPoints
+      });
       setNewItem({ procedure: '', region: '', quantity: 1, unitPrice: 0 });
       setPriceInput('');
       setView('editor');
@@ -251,11 +289,15 @@ const BudgetsTab: React.FC<{ user: any }> = ({ user }) => {
   };
 
   const handleSave = async () => {
-      if(!editingQuote.patientId || !user) { alert("Selecione um paciente"); return; }
+      if(!editingQuote.patientId || !user) { 
+          toast.warning("Selecione um paciente"); 
+          return; 
+      }
       const p = patients.find(pat => pat.id === editingQuote.patientId);
       const quoteToSave = { ...editingQuote, patientName: p?.name || 'Desconhecido' };
       if(editingQuote.id) await updateQuote(editingQuote.id, quoteToSave);
       else await addQuote(quoteToSave);
+      toast.success('Orçamento salvo com sucesso!');
       getQuotes(user.id).then(setQuotes);
       setView('list');
   };
@@ -267,18 +309,225 @@ const BudgetsTab: React.FC<{ user: any }> = ({ user }) => {
       const itemsList = editingQuote.items.map(i => `- ${i.procedure} (${i.region}): ${formatCurrency(i.total)}`).join('\n');
       const message = `Olá ${patient.name}, segue o orçamento do seu planejamento estético:\n\n${itemsList}\n\n*Total: ${formatCurrency(editingQuote.totalAmount || 0)}*\n\nPodemos agendar?`;
       await sendMessage(editingQuote.patientId, message, 'outbound');
-      alert("Orçamento enviado para o chat!");
+      toast.success("Orçamento enviado para o chat!");
   };
 
   const handleDelete = async (id: string) => {
-      if(window.confirm("Excluir orçamento?")) {
+      const confirmed = await confirm({
+          title: 'Excluir Orçamento',
+          message: 'Deseja excluir este orçamento?',
+          confirmText: 'Excluir',
+          cancelText: 'Cancelar',
+          variant: 'danger'
+      });
+      if(confirmed) {
           await deleteQuote(id);
+          toast.success('Orçamento excluído!');
           getQuotes(user.id).then(setQuotes);
       }
   };
 
   const handleAddMapPoint = (point: QuoteMapPoint) => {
       setEditingQuote(prev => ({ ...prev, mapPoints: [...(prev.mapPoints || []), point] }));
+  };
+
+  // Função para exportar o orçamento em PDF
+  const handleExportPdf = async () => {
+    if (!editingQuote.patientId || !editingQuote.items?.length) {
+      toast.warning("Adicione um paciente e pelo menos um item ao orçamento.");
+      return;
+    }
+
+    setIsExportingPdf(true);
+
+    try {
+      const patient = patients.find(p => p.id === editingQuote.patientId);
+      const doc = new jsPDF();
+      const pageWidth = doc.internal.pageSize.getWidth();
+      const margin = 20;
+      let yPos = 20;
+
+      // ============ HEADER COM LOGO ============
+      // Desenhar logo estilizado (círculo com texto)
+      doc.setFillColor(79, 70, 229); // Indigo
+      doc.circle(margin + 12, yPos + 12, 12, 'F');
+      doc.setTextColor(255, 255, 255);
+      doc.setFontSize(14);
+      doc.setFont('helvetica', 'bold');
+      doc.text('C', margin + 8.5, yPos + 16);
+
+      // Nome da clínica
+      doc.setTextColor(15, 23, 42); // Slate-900
+      doc.setFontSize(22);
+      doc.setFont('helvetica', 'bold');
+      doc.text('CLINIFY', margin + 30, yPos + 10);
+
+      // Subtítulo
+      doc.setFontSize(9);
+      doc.setTextColor(100, 116, 139); // Slate-500
+      doc.setFont('helvetica', 'normal');
+      doc.text('Sistema de Gestão Estética', margin + 30, yPos + 17);
+
+      // Número do orçamento
+      doc.setFontSize(10);
+      doc.setTextColor(79, 70, 229);
+      doc.setFont('helvetica', 'bold');
+      const quoteNumber = `#${Date.now().toString().slice(-6)}`;
+      doc.text(`Orçamento ${quoteNumber}`, pageWidth - margin - 40, yPos + 10);
+
+      // Data
+      doc.setFontSize(9);
+      doc.setTextColor(100, 116, 139);
+      doc.setFont('helvetica', 'normal');
+      doc.text(new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' }), pageWidth - margin - 40, yPos + 17);
+
+      yPos += 40;
+
+      // Linha divisória decorativa
+      doc.setDrawColor(226, 232, 240); // Slate-200
+      doc.setLineWidth(0.5);
+      doc.line(margin, yPos, pageWidth - margin, yPos);
+      yPos += 15;
+
+      // ============ DADOS DO PACIENTE ============
+      doc.setFillColor(248, 250, 252); // Slate-50
+      doc.roundedRect(margin, yPos, pageWidth - margin * 2, 40, 4, 4, 'F');
+
+      doc.setFontSize(8);
+      doc.setTextColor(100, 116, 139);
+      doc.setFont('helvetica', 'bold');
+      doc.text('DADOS DO PACIENTE', margin + 8, yPos + 10);
+
+      doc.setFontSize(14);
+      doc.setTextColor(15, 23, 42);
+      doc.setFont('helvetica', 'bold');
+      doc.text(patient?.name || 'Paciente', margin + 8, yPos + 22);
+
+      // Info adicional do paciente
+      doc.setFontSize(9);
+      doc.setTextColor(100, 116, 139);
+      doc.setFont('helvetica', 'normal');
+      const patientInfo = [];
+      if (patient?.phone) patientInfo.push(`Tel: ${patient.phone}`);
+      if (patient?.email) patientInfo.push(`Email: ${patient.email}`);
+      doc.text(patientInfo.join('  •  ') || 'Contato não informado', margin + 8, yPos + 32);
+
+      yPos += 55;
+
+      // ============ TABELA DE ITENS ============
+      doc.setFontSize(8);
+      doc.setTextColor(100, 116, 139);
+      doc.setFont('helvetica', 'bold');
+      doc.text('ITENS DO ORÇAMENTO', margin, yPos);
+      yPos += 10;
+
+      // Header da tabela
+      doc.setFillColor(15, 23, 42); // Slate-900
+      doc.roundedRect(margin, yPos, pageWidth - margin * 2, 12, 2, 2, 'F');
+      doc.setTextColor(255, 255, 255);
+      doc.setFontSize(8);
+      doc.setFont('helvetica', 'bold');
+      doc.text('PROCEDIMENTO', margin + 5, yPos + 8);
+      doc.text('REGIÃO', margin + 80, yPos + 8);
+      doc.text('QTD', margin + 115, yPos + 8);
+      doc.text('UNIT.', margin + 135, yPos + 8);
+      doc.text('TOTAL', pageWidth - margin - 25, yPos + 8);
+      yPos += 16;
+
+      // Itens
+      editingQuote.items?.forEach((item, index) => {
+        const isEven = index % 2 === 0;
+        if (isEven) {
+          doc.setFillColor(248, 250, 252);
+          doc.rect(margin, yPos - 4, pageWidth - margin * 2, 14, 'F');
+        }
+
+        doc.setTextColor(15, 23, 42);
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(9);
+        doc.text(item.procedure.slice(0, 25), margin + 5, yPos + 5);
+
+        doc.setFont('helvetica', 'normal');
+        doc.setTextColor(100, 116, 139);
+        doc.text(item.region || '-', margin + 80, yPos + 5);
+        doc.text(item.quantity.toString(), margin + 117, yPos + 5);
+        
+        doc.setTextColor(15, 23, 42);
+        doc.text(formatCurrency(item.unitPrice), margin + 135, yPos + 5);
+        
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(16, 185, 129); // Emerald-500
+        doc.text(formatCurrency(item.total), pageWidth - margin - 25, yPos + 5);
+
+        yPos += 14;
+      });
+
+      yPos += 10;
+
+      // Linha antes do total
+      doc.setDrawColor(226, 232, 240);
+      doc.setLineWidth(0.5);
+      doc.line(margin, yPos, pageWidth - margin, yPos);
+      yPos += 15;
+
+      // ============ TOTAL ============
+      doc.setFillColor(16, 185, 129); // Emerald-500
+      doc.roundedRect(pageWidth - margin - 80, yPos, 80, 28, 4, 4, 'F');
+
+      doc.setFontSize(8);
+      doc.setTextColor(255, 255, 255);
+      doc.setFont('helvetica', 'normal');
+      doc.text('VALOR TOTAL', pageWidth - margin - 75, yPos + 10);
+
+      doc.setFontSize(16);
+      doc.setFont('helvetica', 'bold');
+      doc.text(formatCurrency(editingQuote.totalAmount || 0), pageWidth - margin - 75, yPos + 22);
+
+      yPos += 45;
+
+      // ============ VALIDADE ============
+      const validUntil = editingQuote.validUntil 
+        ? new Date(editingQuote.validUntil).toLocaleDateString('pt-BR') 
+        : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toLocaleDateString('pt-BR');
+      
+      doc.setFontSize(9);
+      doc.setTextColor(100, 116, 139);
+      doc.setFont('helvetica', 'normal');
+      doc.text(`Orçamento válido até: ${validUntil}`, margin, yPos);
+
+      yPos += 20;
+
+      // ============ ASSINATURA ============
+      doc.setDrawColor(200, 200, 200);
+      doc.setLineWidth(0.3);
+      doc.line(margin, yPos + 30, margin + 70, yPos + 30);
+      doc.line(pageWidth - margin - 70, yPos + 30, pageWidth - margin, yPos + 30);
+
+      doc.setFontSize(8);
+      doc.setTextColor(100, 116, 139);
+      doc.text('Assinatura do Profissional', margin, yPos + 38);
+      doc.text('Assinatura do Paciente', pageWidth - margin - 55, yPos + 38);
+
+      // ============ FOOTER ============
+      const pageHeight = doc.internal.pageSize.getHeight();
+      doc.setFillColor(248, 250, 252);
+      doc.rect(0, pageHeight - 25, pageWidth, 25, 'F');
+
+      doc.setFontSize(8);
+      doc.setTextColor(148, 163, 184);
+      doc.setFont('helvetica', 'normal');
+      doc.text('Documento gerado automaticamente pelo Clinify', pageWidth / 2, pageHeight - 12, { align: 'center' });
+      doc.text(`Gerado em: ${new Date().toLocaleString('pt-BR')}`, pageWidth / 2, pageHeight - 6, { align: 'center' });
+
+      // Salvar o PDF
+      const fileName = `orcamento_${patient?.name?.replace(/\s+/g, '_') || 'paciente'}_${new Date().toISOString().split('T')[0]}.pdf`;
+      doc.save(fileName);
+
+    } catch (error) {
+      toast.error('Erro ao gerar o PDF. Tente novamente.');
+    } finally {
+      setIsExportingPdf(false);
+    }
   };
 
   if (view === 'calculator') {
@@ -343,28 +592,59 @@ const BudgetsTab: React.FC<{ user: any }> = ({ user }) => {
                   <h2 className="text-xl font-bold text-slate-900 dark:text-white leading-none">{editingQuote.id ? 'Editar Planejamento' : 'Novo Planejamento'}</h2>
               </div>
               <div className="flex gap-3">
-                  <button onClick={handleSendToChat} className="hidden sm:flex items-center gap-2 px-4 py-2 text-emerald-600 bg-emerald-50 rounded-lg font-bold text-sm border border-emerald-200"><Send className="w-4 h-4" /> Enviar Chat</button>
-                  <button onClick={handleSave} className="flex items-center gap-2 bg-slate-900 dark:bg-white text-white dark:text-slate-900 px-6 py-2 rounded-lg font-bold text-sm shadow-lg"><Save className="w-4 h-4" /> Salvar</button>
+                  <button 
+                    onClick={handleExportPdf} 
+                    disabled={isExportingPdf}
+                    className="hidden sm:flex items-center gap-2 px-4 py-2 text-indigo-600 bg-indigo-50 rounded-lg font-bold text-sm border border-indigo-200 hover:bg-indigo-100 transition-colors disabled:opacity-50"
+                  >
+                    {isExportingPdf ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />} 
+                    Exportar PDF
+                  </button>
+                  <button onClick={handleSendToChat} className="hidden sm:flex items-center gap-2 px-4 py-2 text-emerald-600 bg-emerald-50 rounded-lg font-bold text-sm border border-emerald-200 hover:bg-emerald-100 transition-colors"><Send className="w-4 h-4" /> Enviar Chat</button>
+                  <button onClick={handleSave} className="flex items-center gap-2 bg-slate-900 dark:bg-white text-white dark:text-slate-900 px-6 py-2 rounded-lg font-bold text-sm shadow-lg hover:opacity-90 transition-opacity"><Save className="w-4 h-4" /> Salvar</button>
               </div>
           </div>
           <div className="flex-1 flex overflow-hidden">
               <div className="w-full lg:w-5/12 flex flex-col border-r border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 overflow-y-auto p-6 space-y-8">
                   <div className="space-y-2">
                       <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Paciente</label>
-                      <select className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl py-3 px-4 focus:ring-2 focus:ring-emerald-500" value={editingQuote.patientId || ''} onChange={(e) => setEditingQuote({...editingQuote, patientId: e.target.value})}><option value="">Selecione um paciente...</option>{patients.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}</select>
+                      <select className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl py-3 px-4 text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500" value={editingQuote.patientId || ''} onChange={(e) => setEditingQuote({...editingQuote, patientId: e.target.value})}><option value="">Selecione um paciente...</option>{patients.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}</select>
                   </div>
                   <div className="bg-slate-50 dark:bg-slate-800/50 p-6 rounded-2xl border border-slate-200 dark:border-slate-800 space-y-5">
                       <h3 className="font-bold text-slate-900 dark:text-white flex items-center gap-2 pb-2 border-b border-slate-200 dark:border-slate-700"><Plus className="w-4 h-4 text-emerald-500" /> Adicionar Procedimento</h3>
                       <div className="grid grid-cols-6 gap-4">
-                          <div className="col-span-4"><label className="text-[10px] font-black text-slate-500 uppercase mb-1 block">Procedimento</label><input type="text" placeholder="Ex: Botox" className="w-full bg-white dark:bg-slate-900 border border-slate-200 rounded-xl py-2.5 px-3 text-sm" value={newItem.procedure} onChange={e => setNewItem({...newItem, procedure: e.target.value})} /></div>
-                          <div className="col-span-2"><label className="text-[10px] font-black text-slate-500 uppercase mb-1 block">Região</label><select className="w-full bg-white dark:bg-slate-900 border border-slate-200 rounded-xl py-2.5 px-3 text-sm" value={newItem.region} onChange={e => setNewItem({...newItem, region: e.target.value})}><option value="">Geral</option><option value="Testa">Testa</option><option value="Labios">Lábios</option></select></div>
-                          <div className="col-span-3"><label className="text-[10px] font-black text-slate-500 uppercase mb-1 block">Valor Unitário</label><div className="relative"><span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs font-bold">R$</span><input type="tel" className="w-full bg-white dark:bg-slate-900 border border-slate-200 rounded-xl py-2.5 pl-8 pr-3 text-sm font-bold text-emerald-600" value={priceInput} onChange={handlePriceChange} /></div></div>
-                          <div className="col-span-2"><label className="text-[10px] font-black text-slate-500 uppercase mb-1 block">Qtd</label><input type="number" className="w-full bg-white dark:bg-slate-900 border border-slate-200 rounded-xl py-2.5 px-3 text-sm text-center font-bold" value={newItem.quantity} onChange={e => setNewItem({...newItem, quantity: parseInt(e.target.value) || 1})} /></div>
+                          <div className="col-span-4"><label className="text-[10px] font-black text-slate-500 uppercase mb-1 block">Procedimento</label><input type="text" placeholder="Ex: Botox" className="w-full bg-white dark:bg-slate-900 border border-slate-200 rounded-xl py-2.5 px-3 text-sm text-slate-900 dark:text-white placeholder-slate-500 dark:placeholder-slate-400" value={newItem.procedure} onChange={e => setNewItem({...newItem, procedure: e.target.value})} /></div>
+                          <div className="col-span-2"><label className="text-[10px] font-black text-slate-500 uppercase mb-1 block">Região</label><select className="w-full bg-white dark:bg-slate-900 border border-slate-200 rounded-xl py-2.5 px-3 text-sm text-slate-900 dark:text-white" value={newItem.region} onChange={e => setNewItem({...newItem, region: e.target.value})}><option value="">Geral</option><option value="Testa">Testa</option><option value="Labios">Lábios</option></select></div>
+                          <div className="col-span-3"><label className="text-[10px] font-black text-slate-500 uppercase mb-1 block">Valor Unitário</label><div className="relative"><span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-600 dark:text-slate-400 text-xs font-bold">R$</span><input type="tel" className="w-full bg-white dark:bg-slate-900 border border-slate-200 rounded-xl py-2.5 pl-8 pr-3 text-sm font-bold text-emerald-600" value={priceInput} onChange={handlePriceChange} /></div></div>
+                          <div className="col-span-2"><label className="text-[10px] font-black text-slate-500 uppercase mb-1 block">Qtd</label><input type="number" className="w-full bg-white dark:bg-slate-900 border border-slate-200 rounded-xl py-2.5 px-3 text-sm text-center font-bold text-slate-900 dark:text-white" value={newItem.quantity} onChange={e => setNewItem({...newItem, quantity: parseInt(e.target.value) || 1})} /></div>
                           <div className="col-span-1 flex items-end"><button onClick={addItem} className="w-full h-[42px] bg-slate-900 text-white rounded-xl font-bold flex items-center justify-center"><Plus className="w-5 h-5" /></button></div>
                       </div>
                   </div>
                   <div className="space-y-3">{editingQuote.items?.map((item) => (<div key={item.id} className="flex justify-between items-center p-4 bg-white dark:bg-slate-800 border border-slate-100 rounded-xl shadow-sm"><div className="flex-1"><p className="font-bold text-sm text-slate-900 dark:text-white">{item.procedure}</p><p className="text-xs text-slate-500">{item.quantity}x {formatCurrency(item.unitPrice)}</p></div><div className="flex items-center gap-4"><span className="font-bold text-emerald-600">{formatCurrency(item.total)}</span><button onClick={() => removeItem(item.id)} className="text-slate-300 hover:text-red-500"><Trash2 className="w-4 h-4" /></button></div></div>))}</div>
-                  <div className="mt-auto p-6 border-t border-slate-200 bg-slate-50 dark:bg-slate-800/30"><div className="flex justify-between items-end"><span className="text-slate-900 dark:text-white font-bold text-lg">Total Final</span><span className="text-3xl font-bold text-emerald-600 tracking-tight">{formatCurrency(editingQuote.totalAmount || 0)}</span></div></div>
+                  <div className="mt-auto p-6 border-t border-slate-200 bg-slate-50 dark:bg-slate-800/30 space-y-4">
+                      <div className="flex justify-between items-end">
+                          <span className="text-slate-900 dark:text-white font-bold text-lg">Total Final</span>
+                          <span className="text-3xl font-bold text-emerald-600 tracking-tight">{formatCurrency(editingQuote.totalAmount || 0)}</span>
+                      </div>
+                      {/* Botão Exportar PDF - Mobile friendly */}
+                      <button 
+                        onClick={handleExportPdf} 
+                        disabled={isExportingPdf || !editingQuote.items?.length}
+                        className="w-full flex items-center justify-center gap-3 px-6 py-4 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-2xl font-bold text-sm shadow-lg shadow-indigo-500/25 hover:shadow-indigo-500/40 hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-50 disabled:hover:scale-100"
+                      >
+                        {isExportingPdf ? (
+                          <>
+                            <Loader2 className="w-5 h-5 animate-spin" />
+                            <span>Gerando PDF...</span>
+                          </>
+                        ) : (
+                          <>
+                            <Download className="w-5 h-5" />
+                            <span>Exportar Orçamento em PDF</span>
+                          </>
+                        )}
+                      </button>
+                  </div>
               </div>
               <div className="hidden lg:flex flex-col flex-1 bg-slate-100 dark:bg-slate-950 relative overflow-hidden items-center justify-center p-10">
                   <div className="absolute top-6 left-6 z-10 bg-white dark:bg-slate-900 p-2 rounded-2xl shadow-xl border border-slate-200 flex flex-col gap-3">

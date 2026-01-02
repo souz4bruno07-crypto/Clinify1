@@ -6,12 +6,27 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
+    "build:all": "npm run build:backend && npm run build:frontend",
+    "build:backend": "cd backend && npm run build",
+    "build:frontend": "tsc && vite build",
     "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "postinstall": "cd backend && npm install",
+    "jira:analyze": "tsx scripts/jira-sync-agent.ts analyze",
+    "jira:sync": "tsx scripts/jira-sync-agent.ts sync",
+    "jira:add": "tsx scripts/jira-sync-agent.ts add",
+    "jira:register-changes": "tsx scripts/jira-sync-agent.ts register-changes",
+    "jira:setup-hook": "chmod +x scripts/setup-jira-hook.sh && ./scripts/setup-jira-hook.sh",
+    "jira:list": "tsx scripts/jira-sync-agent.ts list",
+    "jira:clean": "tsx scripts/jira-sync-agent.ts clean",
+    "jira:dry-run": "tsx scripts/jira-sync-agent.ts dry-run",
+    "jira:report": "tsx scripts/jira-sync-agent.ts report",
+    "jira:export": "tsx scripts/jira-sync-agent.ts export"
   },
   "dependencies": {
     "@google/genai": "*",
     "@supabase/supabase-js": "^2.47.0",
+    "jspdf": "^3.0.4",
     "lucide-react": "^0.475.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
@@ -25,7 +40,9 @@
     "@vitejs/plugin-react": "^4.3.4",
     "autoprefixer": "^10.4.20",
     "postcss": "^8.5.1",
+    "sharp": "^0.34.5",
     "tailwindcss": "^3.4.17",
+    "tsx": "^4.19.2",
     "typescript": "^5.7.3",
     "vite": "^6.0.7",
     "vite-plugin-pwa": "^0.21.1"

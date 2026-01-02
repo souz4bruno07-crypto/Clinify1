@@ -1,0 +1,992 @@
+// Clinify - Schema do Banco de Dados PostgreSQL
+// Execute: npx prisma migrate dev --name init
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// =====================================================
+// USUÁRIOS E AUTENTICAÇÃO
+// =====================================================
+
+model User {
+  id                  String   @id @default(uuid())
+  email               String   @unique
+  password            String
+  name                String
+  clinicName          String   @map("clinic_name")
+  clinicId            String   @map("clinic_id")
+  onboardingCompleted Boolean  @default(false) @map("onboarding_completed")
+  role                UserRole @default(admin)
+  avatarUrl           String?  @map("avatar_url")
+  createdAt           DateTime @default(now()) @map("created_at")
+  updatedAt           DateTime @updatedAt @map("updated_at")
+
+  // Relacionamentos
+  transactions            Transaction[]
+  categories              Category[]
+  patients                Patient[]
+  staff                   Staff[]
+  appointments            Appointment[]
+  quotes                  Quote[]
+  monthlyTargets          MonthlyTarget[]
+  chatThreads             ChatThread[]
+  chatMessages            ChatMessage[]
+  prescriptions           Prescription[]
+  subscription            Subscription?
+  loyaltyMembers          LoyaltyMember[]
+  loyaltyRewards          LoyaltyReward[]
+  staffTargets            StaffTarget[]
+  procedureCommissions    ProcedureCommission[]
+  commissionRecords       CommissionRecord[]
+  commissionPaymentReports CommissionPaymentReport[]
+  medicalRecords          MedicalRecord[]
+  anamnesisTemplates      AnamnesisTemplate[]
+
+  @@index([clinicId, role])
+  @@index([clinicId, createdAt])
+  @@map("users")
+}
+
+enum UserRole {
+  superadmin
+  admin
+  finance
+  reception
+  viewer
+}
+
+// =====================================================
+// FINANCEIRO
+// =====================================================
+
+model Transaction {
+  id            String          @id @default(uuid())
+  userId        String          @map("user_id")
+  description   String
+  amount        Decimal         @db.Decimal(12, 2)
+  type          TransactionType
+  category      String          @default("Geral")
+  date          BigInt
+  patientName   String?         @map("patient_name")
+  paymentMethod String?         @map("payment_method")
+  isPaid        Boolean         @default(true) @map("is_paid")
+  tags          String?
+  createdAt     DateTime        @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([date])
+  @@index([type])
+  @@index([userId, date, type])
+  @@index([userId, category, date])
+  @@map("transactions")
+}
+
+enum TransactionType {
+  revenue
+  expense
+}
+
+model Category {
+  id        String       @id @default(uuid())
+  name      String
+  type      CategoryType
+  userId    String?      @map("user_id")
+  createdAt DateTime     @default(now()) @map("created_at")
+
+  user User? @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("categories")
+}
+
+enum CategoryType {
+  revenue
+  expense_variable
+  expense_fixed
+}
+
+model MonthlyTarget {
+  id               String   @id @default(uuid())
+  userId           String   @map("user_id")
+  monthYear        String   @map("month_year")
+  plannedRevenue   Decimal  @default(0) @map("planned_revenue") @db.Decimal(12, 2)
+  plannedPurchases Decimal  @default(0) @map("planned_purchases") @db.Decimal(12, 2)
+  createdAt        DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, monthYear])
+  @@map("monthly_targets")
+}
+
+// =====================================================
+// PACIENTES
+// =====================================================
+
+model Patient {
+  id                  String   @id @default(uuid())
+  userId              String   @map("user_id")
+  name                String
+  phone               String
+  email               String?
+  cpf                 String?
+  birthDate           String?  @map("birth_date")
+  profession          String?
+  marketingSource     String?  @map("marketing_source")
+  cep                 String?
+  addressStreet       String?  @map("address_street")
+  addressNumber       String?  @map("address_number")
+  addressComplement   String?  @map("address_complement")
+  addressNeighborhood String?  @map("address_neighborhood")
+  addressCity         String?  @map("address_city")
+  addressState        String?  @map("address_state")
+  height              String?
+  weight              String?
+  notes               String?
+  avatarUrl           String?  @map("avatar_url")
+  createdAt           DateTime @default(now()) @map("created_at")
+
+  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  appointments Appointment[]
+  quotes       Quote[]
+  medicalRecord MedicalRecord?
+
+  @@index([userId])
+  @@index([phone])
+  @@index([userId, name])
+  @@index([userId, createdAt])
+  @@map("patients")
+}
+
+// =====================================================
+// EQUIPE
+// =====================================================
+
+model Staff {
+  id             String   @id @default(uuid())
+  userId         String   @map("user_id")
+  name           String
+  role           String
+  color          String   @default("#3B82F6")
+  commissionRate Decimal  @default(0) @map("commission_rate") @db.Decimal(5, 2)
+  phone          String?
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  appointments Appointment[]
+
+  @@index([userId])
+  @@map("staff")
+}
+
+// =====================================================
+// AGENDAMENTOS
+// =====================================================
+
+model Appointment {
+  id          String            @id @default(uuid())
+  userId      String            @map("user_id")
+  patientId   String?           @map("patient_id")
+  patientName String            @map("patient_name")
+  staffId     String?           @map("staff_id")
+  startTime   BigInt            @map("start_time")
+  endTime     BigInt            @map("end_time")
+  serviceName String            @map("service_name")
+  status      AppointmentStatus @default(scheduled)
+  notes       String?
+  createdAt   DateTime          @default(now()) @map("created_at")
+
+  user    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  patient Patient? @relation(fields: [patientId], references: [id], onDelete: SetNull)
+  staff   Staff?   @relation(fields: [staffId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([startTime])
+  @@index([userId, startTime, status])
+  @@index([staffId, startTime])
+  @@map("appointments")
+}
+
+enum AppointmentStatus {
+  scheduled
+  confirmed
+  completed
+  canceled
+}
+
+// =====================================================
+// ORÇAMENTOS
+// =====================================================
+
+model Quote {
+  id          String      @id @default(uuid())
+  userId      String      @map("user_id")
+  patientId   String?     @map("patient_id")
+  patientName String      @map("patient_name")
+  items       Json        @default("[]")
+  mapPoints   Json        @default("[]") @map("map_points")
+  totalAmount Decimal     @default(0) @map("total_amount") @db.Decimal(12, 2)
+  status      QuoteStatus @default(draft)
+  createdAt   BigInt      @map("created_at")
+  validUntil  BigInt      @map("valid_until")
+
+  user    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  patient Patient? @relation(fields: [patientId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@map("quotes")
+}
+
+enum QuoteStatus {
+  draft
+  sent
+  approved
+  rejected
+}
+
+// =====================================================
+// CHAT / CRM
+// =====================================================
+
+model ChatThread {
+  id            String   @id
+  userId        String   @map("user_id")
+  contactName   String   @map("contact_name")
+  lastMessage   String?  @map("last_message")
+  lastTimestamp BigInt?  @map("last_timestamp")
+  avatarUrl     String?  @map("avatar_url")
+  crmStage      String   @default("new") @map("crm_stage")
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("chat_threads")
+}
+
+model ChatMessage {
+  id           String        @id @default(uuid())
+  userId       String?       @map("user_id")
+  patientId    String        @map("patient_id")
+  content      String
+  direction    ChatDirection
+  timestamp    BigInt
+  contactName  String?       @map("contact_name")
+  contactPhone String?       @map("contact_phone")
+  status       ChatStatus    @default(sent)
+  createdAt    DateTime      @default(now()) @map("created_at")
+
+  user User? @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([patientId])
+  @@index([userId])
+  @@map("chat_messages")
+}
+
+enum ChatDirection {
+  inbound
+  outbound
+}
+
+enum ChatStatus {
+  sent
+  delivered
+  read
+}
+
+// =====================================================
+// CONTROLE DE ESTOQUE
+// =====================================================
+
+model InventoryProduct {
+  id             String           @id @default(uuid())
+  userId         String           @map("user_id")
+  name           String
+  description    String?
+  barcode        String?
+  sku            String?
+  category       String           @default("Geral")
+  unit           ProductUnit      @default(un)
+  currentStock   Decimal          @default(0) @map("current_stock") @db.Decimal(12, 3)
+  minStock       Decimal          @default(0) @map("min_stock") @db.Decimal(12, 3)
+  maxStock       Decimal?         @map("max_stock") @db.Decimal(12, 3)
+  costPrice      Decimal          @default(0) @map("cost_price") @db.Decimal(12, 2)
+  salePrice      Decimal?         @map("sale_price") @db.Decimal(12, 2)
+  supplier       String?
+  location       String?
+  expirationDate BigInt?          @map("expiration_date")
+  batchNumber    String?          @map("batch_number")
+  isActive       Boolean          @default(true) @map("is_active")
+  createdAt      DateTime         @default(now()) @map("created_at")
+  updatedAt      DateTime         @updatedAt @map("updated_at")
+
+  movements      StockMovement[]
+  procedures     ProductProcedure[]
+
+  @@index([userId])
+  @@index([barcode])
+  @@index([category])
+  @@map("inventory_products")
+}
+
+enum ProductUnit {
+  un
+  ml
+  mg
+  g
+  kg
+  cx
+  pct
+  fr
+  amp
+}
+
+model StockMovement {
+  id             String       @id @default(uuid())
+  productId      String       @map("product_id")
+  userId         String       @map("user_id")
+  staffId        String?      @map("staff_id")
+  type           MovementType
+  quantity       Decimal      @db.Decimal(12, 3)
+  previousStock  Decimal      @map("previous_stock") @db.Decimal(12, 3)
+  newStock       Decimal      @map("new_stock") @db.Decimal(12, 3)
+  unitCost       Decimal?     @map("unit_cost") @db.Decimal(12, 2)
+  totalCost      Decimal?     @map("total_cost") @db.Decimal(12, 2)
+  reason         String?
+  appointmentId  String?      @map("appointment_id")
+  patientName    String?      @map("patient_name")
+  batchNumber    String?      @map("batch_number")
+  expirationDate BigInt?      @map("expiration_date")
+  invoiceNumber  String?      @map("invoice_number")
+  createdAt      DateTime     @default(now()) @map("created_at")
+
+  product        InventoryProduct @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@index([productId])
+  @@index([userId])
+  @@index([staffId])
+  @@index([createdAt])
+  @@map("stock_movements")
+}
+
+enum MovementType {
+  entrada
+  saida
+  ajuste
+  perda
+  vencido
+}
+
+model ProductProcedure {
+  id             String  @id @default(uuid())
+  productId      String  @map("product_id")
+  procedureName  String  @map("procedure_name")
+  quantityPerUse Decimal @map("quantity_per_use") @db.Decimal(12, 3)
+  isRequired     Boolean @default(true) @map("is_required")
+  notes          String?
+
+  product        InventoryProduct @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@index([productId])
+  @@index([procedureName])
+  @@map("product_procedures")
+}
+
+model StockAlert {
+  id             String    @id @default(uuid())
+  userId         String    @map("user_id")
+  productId      String    @map("product_id")
+  alertType      AlertType @map("alert_type")
+  currentStock   Decimal   @map("current_stock") @db.Decimal(12, 3)
+  minStock       Decimal   @map("min_stock") @db.Decimal(12, 3)
+  expirationDate BigInt?   @map("expiration_date")
+  daysUntilExpiry Int?     @map("days_until_expiry")
+  isRead         Boolean   @default(false) @map("is_read")
+  createdAt      DateTime  @default(now()) @map("created_at")
+
+  @@index([userId])
+  @@index([productId])
+  @@index([isRead])
+  @@map("stock_alerts")
+}
+
+enum AlertType {
+  low_stock
+  expiring
+  expired
+  out_of_stock
+}
+
+// =====================================================
+// PRESCRIÇÕES DIGITAIS
+// =====================================================
+
+model Prescription {
+  id                  String            @id @default(uuid())
+  clinicId            String            @map("clinic_id")
+  userId              String            @map("user_id")
+  patientId           String?           @map("patient_id")
+  patientName         String            @map("patient_name")
+  patientCpf          String?           @map("patient_cpf")
+  patientBirthDate    String?           @map("patient_birth_date")
+  patientAddress      String?           @map("patient_address")
+  professionalId     String            @map("professional_id")
+  professionalName    String            @map("professional_name")
+  professionalCrm     String?           @map("professional_crm")
+  professionalSpecialty String?         @map("professional_specialty")
+  items               Json              @default("[]")
+  diagnosis           String?
+  additionalNotes     String?           @map("additional_notes")
+  templateId          String?           @map("template_id")
+  signatureData       String?           @map("signature_data") @db.Text
+  signedAt           BigInt?           @map("signed_at")
+  status              PrescriptionStatus @default(draft)
+  sentVia             Json?             @map("sent_via") @default("[]")
+  sentAt              BigInt?           @map("sent_at")
+  pdfUrl              String?           @map("pdf_url")
+  validUntil          BigInt?           @map("valid_until")
+  isControlled        Boolean           @default(false) @map("is_controlled")
+  createdAt           BigInt            @map("created_at")
+  updatedAt           BigInt            @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([clinicId])
+  @@index([patientId])
+  @@index([professionalId])
+  @@index([status])
+  @@map("prescriptions")
+}
+
+enum PrescriptionStatus {
+  draft
+  signed
+  sent
+  cancelled
+}
+
+// =====================================================
+// ASSINATURAS E PAGAMENTOS
+// =====================================================
+
+model Subscription {
+  id                String            @id @default(uuid())
+  userId            String            @unique @map("user_id")
+  plan              SubscriptionPlan
+  status            SubscriptionStatus
+  startDate         DateTime          @map("start_date")
+  endDate           DateTime?         @map("end_date")
+  stripeCustomerId  String?           @map("stripe_customer_id")
+  mercadoPagoCustomerId String?       @map("mercado_pago_customer_id")
+  cancelAtPeriodEnd Boolean           @default(false) @map("cancel_at_period_end")
+  canceledAt        DateTime?         @map("canceled_at")
+  createdAt         DateTime          @default(now()) @map("created_at")
+  updatedAt         DateTime          @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([status])
+  @@index([plan])
+  @@map("subscriptions")
+}
+
+enum SubscriptionPlan {
+  free
+  basic
+  professional
+  enterprise
+}
+
+enum SubscriptionStatus {
+  active
+  canceled
+  past_due
+  trialing
+  incomplete
+}
+
+// =====================================================
+// PROGRAMA DE FIDELIDADE
+// =====================================================
+
+model LoyaltyMember {
+  id                  String   @id @default(uuid())
+  userId              String   @map("user_id")
+  patientId           String?  @map("patient_id")
+  patientName         String   @map("patient_name")
+  totalPoints         Int      @default(0) @map("total_points")
+  availablePoints     Int      @default(0) @map("available_points")
+  tier                LoyaltyTier @default(bronze)
+  totalConsultations  Int      @default(0) @map("total_consultations")
+  totalProcedures     Int      @default(0) @map("total_procedures")
+  totalReferrals      Int      @default(0) @map("total_referrals")
+  referralCode       String   @unique @map("referral_code")
+  joinedAt            BigInt   @map("joined_at")
+  lastActivityAt      BigInt   @map("last_activity_at")
+  createdAt           DateTime @default(now()) @map("created_at")
+  updatedAt           DateTime @updatedAt @map("updated_at")
+
+  user                User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  pointsHistory       LoyaltyPointsHistory[]
+  redemptions         LoyaltyRedemption[]
+  referrals           LoyaltyReferral[]   @relation("Referrer")
+  referredBy          LoyaltyReferral[]   @relation("Referred")
+
+  @@index([userId])
+  @@index([patientId])
+  @@index([referralCode])
+  @@map("loyalty_members")
+}
+
+enum LoyaltyTier {
+  bronze
+  silver
+  gold
+  diamond
+}
+
+model LoyaltyReward {
+  id          String      @id @default(uuid())
+  userId      String      @map("user_id")
+  name        String
+  description String
+  pointsCost  Int         @map("points_cost")
+  type        RewardType
+  value       Decimal     @db.Decimal(12, 2)
+  isActive    Boolean     @default(true) @map("is_active")
+  tier        LoyaltyTier?
+  stock       Int?
+  validDays   Int         @default(30) @map("valid_days")
+  category    RewardCategory @default(beauty)
+  createdAt   DateTime    @default(now()) @map("created_at")
+  updatedAt   DateTime    @updatedAt @map("updated_at")
+
+  user        User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  redemptions LoyaltyRedemption[]
+
+  @@index([userId])
+  @@index([isActive])
+  @@map("loyalty_rewards")
+}
+
+enum RewardType {
+  discount
+  product
+  procedure
+  voucher
+}
+
+enum RewardCategory {
+  beauty
+  health
+  wellness
+  special
+}
+
+model LoyaltyRedemption {
+  id          String            @id @default(uuid())
+  memberId    String            @map("member_id")
+  rewardId    String            @map("reward_id")
+  rewardName  String            @map("reward_name")
+  pointsSpent Int               @map("points_spent")
+  status      RedemptionStatus  @default(pending)
+  code        String            @unique
+  createdAt   BigInt            @map("created_at")
+  expiresAt   BigInt            @map("expires_at")
+  usedAt      BigInt?           @map("used_at")
+
+  member      LoyaltyMember     @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  reward      LoyaltyReward     @relation(fields: [rewardId], references: [id], onDelete: Cascade)
+
+  @@index([memberId])
+  @@index([rewardId])
+  @@index([status])
+  @@map("loyalty_redemptions")
+}
+
+enum RedemptionStatus {
+  pending
+  used
+  expired
+}
+
+model LoyaltyPointsHistory {
+  id          String   @id @default(uuid())
+  memberId    String   @map("member_id")
+  points      Int
+  source      PointsSource
+  description String
+  createdAt   BigInt   @map("created_at")
+
+  member      LoyaltyMember @relation(fields: [memberId], references: [id], onDelete: Cascade)
+
+  @@index([memberId])
+  @@index([createdAt])
+  @@map("loyalty_points_history")
+}
+
+enum PointsSource {
+  consultation
+  procedure
+  referral
+  birthday
+  review
+  bonus
+}
+
+model LoyaltyReferral {
+  id           String           @id @default(uuid())
+  referrerId   String           @map("referrer_id")
+  referredId   String?          @map("referred_id")
+  referredName String           @map("referred_name")
+  status       ReferralStatus   @default(pending)
+  bonusPoints  Int              @map("bonus_points")
+  code         String
+  createdAt    BigInt           @map("created_at")
+  completedAt  BigInt?          @map("completed_at")
+
+  referrer     LoyaltyMember    @relation("Referrer", fields: [referrerId], references: [id], onDelete: Cascade)
+  referred     LoyaltyMember?   @relation("Referred", fields: [referredId], references: [id], onDelete: SetNull)
+
+  @@index([referrerId])
+  @@index([referredId])
+  @@index([status])
+  @@map("loyalty_referrals")
+}
+
+enum ReferralStatus {
+  pending
+  completed
+}
+
+// =====================================================
+// METAS E COMISSÕES DE PROFISSIONAIS
+// =====================================================
+
+model StaffTarget {
+  id              String   @id @default(uuid())
+  staffId         String   @map("staff_id")
+  staffName       String   @map("staff_name")
+  userId          String   @map("user_id")
+  monthYear       String   @map("month_year")
+  targetRevenue   Decimal  @default(0) @map("target_revenue") @db.Decimal(12, 2)
+  achievedRevenue Decimal  @default(0) @map("achieved_revenue") @db.Decimal(12, 2)
+  proceduresCount Int      @default(0) @map("procedures_count")
+  commissionRate  Decimal  @default(0) @map("commission_rate") @db.Decimal(5, 2)
+  commissionValue Decimal  @default(0) @map("commission_value") @db.Decimal(12, 2)
+  bonusThreshold  Decimal? @map("bonus_threshold") @db.Decimal(5, 2)
+  bonusRate       Decimal? @map("bonus_rate") @db.Decimal(5, 2)
+  createdAt       BigInt   @map("created_at")
+  updatedAt       BigInt   @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([staffId, monthYear])
+  @@index([userId])
+  @@index([staffId])
+  @@index([monthYear])
+  @@map("staff_targets")
+}
+
+model ProcedureCommission {
+  id              String            @id @default(uuid())
+  userId          String            @map("user_id")
+  procedureName   String            @map("procedure_name")
+  basePrice       Decimal           @default(0) @map("base_price") @db.Decimal(12, 2)
+  commissionType  CommissionType    @map("commission_type")
+  commissionValue Decimal           @default(0) @map("commission_value") @db.Decimal(12, 2)
+  staffId         String?           @map("staff_id")
+  isActive        Boolean           @default(true) @map("is_active")
+  createdAt       DateTime          @default(now()) @map("created_at")
+  updatedAt       DateTime          @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([staffId])
+  @@index([procedureName])
+  @@map("procedure_commissions")
+}
+
+enum CommissionType {
+  percentage
+  fixed
+}
+
+model CommissionRecord {
+  id              String             @id @default(uuid())
+  staffId         String             @map("staff_id")
+  staffName       String             @map("staff_name")
+  userId          String             @map("user_id")
+  transactionId   String             @map("transaction_id")
+  procedureName   String             @map("procedure_name")
+  procedureValue  Decimal            @default(0) @map("procedure_value") @db.Decimal(12, 2)
+  commissionRate  Decimal            @default(0) @map("commission_rate") @db.Decimal(5, 2)
+  commissionValue Decimal            @default(0) @map("commission_value") @db.Decimal(12, 2)
+  bonusApplied    Boolean            @default(false) @map("bonus_applied")
+  date            BigInt
+  status          CommissionStatus   @default(pending)
+  paidAt          BigInt?            @map("paid_at")
+  createdAt       DateTime           @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([staffId])
+  @@index([transactionId])
+  @@index([date])
+  @@index([status])
+  @@map("commission_records")
+}
+
+enum CommissionStatus {
+  pending
+  approved
+  paid
+}
+
+model CommissionPaymentReport {
+  id                String              @id @default(uuid())
+  userId            String              @map("user_id")
+  staffId           String              @map("staff_id")
+  staffName         String              @map("staff_name")
+  monthYear         String              @map("month_year")
+  totalProcedures   Int                 @default(0) @map("total_procedures")
+  totalRevenue      Decimal             @default(0) @map("total_revenue") @db.Decimal(12, 2)
+  baseCommission    Decimal             @default(0) @map("base_commission") @db.Decimal(12, 2)
+  bonusCommission   Decimal             @default(0) @map("bonus_commission") @db.Decimal(12, 2)
+  totalCommission   Decimal             @default(0) @map("total_commission") @db.Decimal(12, 2)
+  deductions        Decimal             @default(0) @db.Decimal(12, 2)
+  netPayable        Decimal             @default(0) @map("net_payable") @db.Decimal(12, 2)
+  status            PaymentReportStatus @default(draft)
+  approvedBy        String?             @map("approved_by")
+  approvedAt        BigInt?             @map("approved_at")
+  paidAt            BigInt?             @map("paid_at")
+  paymentMethod     String?             @map("payment_method")
+  notes             String?             @db.Text
+  createdAt         DateTime            @default(now()) @map("created_at")
+  updatedAt         DateTime            @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([staffId, monthYear])
+  @@index([userId])
+  @@index([staffId])
+  @@index([monthYear])
+  @@index([status])
+  @@map("commission_payment_reports")
+}
+
+enum PaymentReportStatus {
+  draft
+  approved
+  paid
+}
+
+// =====================================================
+// PRONTUÁRIO ELETRÔNICO DO PACIENTE (PEP)
+// =====================================================
+
+model MedicalRecord {
+  id          String   @id @default(uuid())
+  patientId   String   @unique @map("patient_id")
+  userId      String   @map("user_id")
+  createdAt   BigInt   @map("created_at")
+  updatedAt   BigInt   @map("updated_at")
+
+  user                 User                    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  patient              Patient                 @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  clinicalNotes        ClinicalNote[]
+  consultationRecords  ConsultationRecord[]
+  anamnesisResponses   AnamnesisResponse[]
+  medicalAttachments   MedicalAttachment[]
+  digitalSignatures    DigitalSignature[]
+  odontogram           Odontogram?
+
+  @@index([userId])
+  @@index([patientId])
+  @@map("medical_records")
+}
+
+model ClinicalNote {
+  id              String        @id @default(uuid())
+  medicalRecordId String        @map("medical_record_id")
+  patientId       String        @map("patient_id")
+  professionalId  String        @map("professional_id")
+  professionalName String       @map("professional_name")
+  content         String        @db.Text
+  type            NoteType
+  attachments     String[]
+  createdAt       BigInt        @map("created_at")
+  updatedAt       BigInt        @map("updated_at")
+
+  medicalRecord MedicalRecord @relation(fields: [medicalRecordId], references: [id], onDelete: Cascade)
+
+  @@index([medicalRecordId])
+  @@index([patientId])
+  @@index([professionalId])
+  @@index([createdAt])
+  @@map("clinical_notes")
+}
+
+enum NoteType {
+  consultation
+  procedure
+  observation
+  prescription
+  referral
+}
+
+model ConsultationRecord {
+  id                String    @id @default(uuid())
+  medicalRecordId   String    @map("medical_record_id")
+  patientId         String    @map("patient_id")
+  appointmentId     String?   @map("appointment_id")
+  professionalId    String    @map("professional_id")
+  professionalName  String    @map("professional_name")
+  chiefComplaint    String    @map("chief_complaint") @db.Text
+  clinicalExam      String    @map("clinical_exam") @db.Text
+  diagnosis         String    @db.Text
+  treatmentPlan     String    @map("treatment_plan") @db.Text
+  procedures        String[]
+  prescriptions     String[]
+  odontogramSnapshot Json?    @map("odontogram_snapshot")
+  signatureId       String?   @map("signature_id")
+  createdAt         BigInt    @map("created_at")
+  updatedAt         BigInt    @map("updated_at")
+
+  medicalRecord MedicalRecord @relation(fields: [medicalRecordId], references: [id], onDelete: Cascade)
+
+  @@index([medicalRecordId])
+  @@index([patientId])
+  @@index([professionalId])
+  @@index([appointmentId])
+  @@index([createdAt])
+  @@map("consultation_records")
+}
+
+model Odontogram {
+  id          String    @id @default(uuid())
+  medicalRecordId String @unique @map("medical_record_id")
+  patientId   String    @map("patient_id")
+  teeth       Json      @default("[]")
+  createdAt   BigInt    @map("created_at")
+  updatedAt   BigInt    @map("updated_at")
+
+  medicalRecord MedicalRecord @relation(fields: [medicalRecordId], references: [id], onDelete: Cascade)
+
+  @@index([patientId])
+  @@map("odontograms")
+}
+
+model AnamnesisTemplate {
+  id          String   @id @default(uuid())
+  userId      String   @map("user_id")
+  name        String
+  specialty   TemplateSpecialty
+  fields      Json     @default("[]")
+  isDefault   Boolean  @default(false) @map("is_default")
+  createdAt   BigInt   @map("created_at")
+  updatedAt   BigInt   @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([specialty])
+  @@map("anamnesis_templates")
+}
+
+enum TemplateSpecialty {
+  general
+  dental
+  dermatology
+  cardiology
+  custom
+}
+
+model AnamnesisResponse {
+  id              String   @id @default(uuid())
+  medicalRecordId String   @map("medical_record_id")
+  patientId       String   @map("patient_id")
+  templateId      String   @map("template_id")
+  responses       Json     @default("{}")
+  signatureId     String?  @map("signature_id")
+  createdAt       BigInt   @map("created_at")
+  updatedAt       BigInt   @map("updated_at")
+
+  medicalRecord MedicalRecord @relation(fields: [medicalRecordId], references: [id], onDelete: Cascade)
+
+  @@index([medicalRecordId])
+  @@index([patientId])
+  @@index([templateId])
+  @@index([createdAt])
+  @@map("anamnesis_responses")
+}
+
+model MedicalAttachment {
+  id            String            @id @default(uuid())
+  medicalRecordId String          @map("medical_record_id")
+  patientId     String            @map("patient_id")
+  name          String
+  type          AttachmentType
+  url           String            @db.Text
+  thumbnailUrl  String?           @map("thumbnail_url") @db.Text
+  mimeType      String            @map("mime_type")
+  size          BigInt
+  description   String?           @db.Text
+  uploadedBy    String            @map("uploaded_by")
+  createdAt     BigInt            @map("created_at")
+
+  medicalRecord MedicalRecord @relation(fields: [medicalRecordId], references: [id], onDelete: Cascade)
+
+  @@index([medicalRecordId])
+  @@index([patientId])
+  @@index([type])
+  @@index([createdAt])
+  @@map("medical_attachments")
+}
+
+enum AttachmentType {
+  xray
+  photo
+  exam
+  document
+  other
+}
+
+model DigitalSignature {
+  id            String         @id @default(uuid())
+  medicalRecordId String?      @map("medical_record_id")
+  patientId     String         @map("patient_id")
+  documentType  SignatureType  @map("document_type")
+  documentId    String         @map("document_id")
+  signatureData String         @map("signature_data") @db.Text
+  signedAt      BigInt         @map("signed_at")
+  ipAddress     String?        @map("ip_address")
+
+  medicalRecord MedicalRecord? @relation(fields: [medicalRecordId], references: [id], onDelete: Cascade)
+
+  @@index([medicalRecordId])
+  @@index([patientId])
+  @@index([documentId])
+  @@index([documentType])
+  @@index([signedAt])
+  @@map("digital_signatures")
+}
+
+enum SignatureType {
+  consent
+  anamnesis
+  treatment_plan
+  contract
+}
+
