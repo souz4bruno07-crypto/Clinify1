@@ -36,20 +36,31 @@ export function validateEnv(): EnvConfig {
 
   if (missing.length > 0) {
     // Usar console.error aqui porque o logger pode não estar inicializado ainda
-    console.error('❌ Erro: Variáveis de ambiente obrigatórias não encontradas:');
-    missing.forEach(varName => {
-      console.error(`   - ${varName}`);
-    });
-    console.error('\n💡 Dica: Crie um arquivo .env na pasta backend/ com essas variáveis.');
-    console.error('   Veja backend/.env.example para um exemplo.\n');
-    process.exit(1);
+    const errorMsg = `❌ Erro: Variáveis de ambiente obrigatórias não encontradas: ${missing.join(', ')}`;
+    console.error(errorMsg);
+    console.error('\n💡 Dica: Configure essas variáveis no Vercel (Settings → Environment Variables)');
+    
+    // No Vercel, não fazer exit - lançar erro para que o Vercel mostre o erro corretamente
+    if (process.env.VERCEL) {
+      throw new Error(`Missing required environment variables: ${missing.join(', ')}. Please configure them in Vercel Settings → Environment Variables`);
+    } else {
+      // Em desenvolvimento local, fazer exit
+      process.exit(1);
+    }
   }
 
   // Validar JWT_SECRET - não pode ser o valor padrão inseguro
   if (process.env.JWT_SECRET === 'clinify-secret-key-change-in-production') {
-    console.error('❌ Erro: JWT_SECRET não pode usar o valor padrão inseguro.');
+    const errorMsg = '❌ Erro: JWT_SECRET não pode usar o valor padrão inseguro.';
+    console.error(errorMsg);
     console.error('💡 Dica: Gere uma chave secreta forte usando: openssl rand -base64 32\n');
-    process.exit(1);
+    
+    // No Vercel, não fazer exit - lançar erro
+    if (process.env.VERCEL) {
+      throw new Error('JWT_SECRET cannot use insecure default value. Please set a secure secret in Vercel Settings → Environment Variables');
+    } else {
+      process.exit(1);
+    }
   }
 
   // Validar JWT_SECRET - deve ter pelo menos 32 caracteres
