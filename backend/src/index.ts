@@ -148,9 +148,15 @@ app.use((err: any, _req: express.Request, res: express.Response, _next: express.
   });
 });
 
-app.listen(PORT, () => {
-  logger.info(`🚀 Servidor rodando em http://localhost:${PORT}`);
-  logger.info(`📊 Health check: http://localhost:${PORT}/health`);
-  logger.info(`📚 Documentação Swagger: http://localhost:${PORT}/api/docs`);
-});
+// Exportar o app para o Vercel (serverless)
+export default app;
+
+// Iniciar servidor apenas em desenvolvimento local
+if (process.env.NODE_ENV !== 'production' || !process.env.VERCEL) {
+  app.listen(PORT, () => {
+    logger.info(`🚀 Servidor rodando em http://localhost:${PORT}`);
+    logger.info(`📊 Health check: http://localhost:${PORT}/health`);
+    logger.info(`📚 Documentação Swagger: http://localhost:${PORT}/api/docs`);
+  });
+}
 
