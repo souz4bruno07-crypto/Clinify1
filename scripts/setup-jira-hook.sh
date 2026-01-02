@@ -34,3 +34,4 @@ echo "💡 Para desativar, remova o arquivo: .git/hooks/post-commit"
 echo ""
 
 
+

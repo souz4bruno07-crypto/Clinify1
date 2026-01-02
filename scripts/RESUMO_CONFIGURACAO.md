@@ -54,3 +54,4 @@ npm run jira:sync       # Sincronizar com Jira
 Consulte o guia completo: `scripts/COMO_CONFIGURAR_JIRA.md`
 
 
+

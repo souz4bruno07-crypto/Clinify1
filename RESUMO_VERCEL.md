@@ -87,3 +87,4 @@ npx prisma migrate deploy
 Veja `CHECKLIST_VERCEL.md` para documentação detalhada.
 
 
+

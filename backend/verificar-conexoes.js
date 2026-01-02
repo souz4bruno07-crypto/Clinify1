@@ -207,3 +207,4 @@ console.log('\n' + '='.repeat(60));
 console.log('✅ Verificação concluída!\n');
 
 
+

@@ -203,3 +203,4 @@ git commit -m "Initial commit"
 - **Todos os comandos:** Execute `npm run jira:help` ou veja o código em `scripts/jira-sync-agent.ts`
 
 
+

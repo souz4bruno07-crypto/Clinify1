@@ -97,3 +97,4 @@ Depois acesse: http://localhost:5555
 Mantenha o Prisma Studio aberto em uma aba do navegador enquanto desenvolve. Assim você pode ver em tempo real o que está sendo salvo no banco!
 
 
+

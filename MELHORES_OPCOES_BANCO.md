@@ -152,3 +152,4 @@ Mas se só quer o banco por enquanto, **Neon** é a melhor escolha! 🎯
 Se tiver dúvidas ao configurar qualquer um desses serviços, me avise que eu te ajudo passo a passo!
 
 
+

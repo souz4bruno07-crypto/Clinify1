@@ -71,3 +71,4 @@ VITE_API_URL=http://localhost:3001/api
 Agora tudo deve funcionar corretamente! 🚀
 
 
+

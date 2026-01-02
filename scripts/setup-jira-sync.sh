@@ -70,3 +70,4 @@ echo "💡 Para mais informações, consulte: scripts/JIRA_SYNC_README.md"
 echo ""
 
 
+

@@ -99,3 +99,4 @@ O Vite (servidor do frontend) precisa da variável `VITE_API_URL` para saber ond
 Me avise se ainda não funcionar! 🚀
 
 
+

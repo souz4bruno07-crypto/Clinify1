@@ -116,3 +116,4 @@ npm run dev
 Depois que o servidor iniciar sem erros, seu banco está conectado! 🚀
 
 
+

@@ -80,3 +80,4 @@ npm run jira:sync
 Consulte a documentação completa: `scripts/JIRA_SYNC_README.md`
 
 
+

@@ -25,3 +25,4 @@ npm run jira:register-changes HEAD~1 HEAD 2>/dev/null || true
 exit 0
 
 
+

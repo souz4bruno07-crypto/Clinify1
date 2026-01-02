@@ -84,3 +84,4 @@ Assim, toda vez que abrir um terminal, as variáveis já estarão configuradas!
 Seu sistema está **100% funcional** e conectado ao PostgreSQL remoto! 🚀
 
 
+

@@ -98,3 +98,4 @@ echo "4. Importe o projeto no Vercel"
 echo ""
 echo "📖 Consulte o arquivo GUIA_DEPLOY_VERCEL.md para mais detalhes"
 
+

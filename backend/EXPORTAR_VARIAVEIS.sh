@@ -12,3 +12,4 @@ echo "✅ Variáveis de ambiente exportadas!"
 echo "Agora execute: npm run dev"
 
 
+
