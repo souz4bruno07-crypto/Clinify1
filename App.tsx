@@ -47,6 +47,9 @@ const BackendChecker: React.FC<{ children: React.ReactNode }> = ({ children }) =
   }
 
   if (backendStatus === 'offline') {
+    const isProduction = window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1';
+    const currentApiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
+    
     return (
       <div className="min-h-screen bg-slate-900 flex items-center justify-center p-4">
         <div className="max-w-lg w-full bg-white rounded-2xl shadow-2xl overflow-hidden">
@@ -59,16 +62,43 @@ const BackendChecker: React.FC<{ children: React.ReactNode }> = ({ children }) =
               Não foi possível conectar ao servidor. Certifique-se de que o backend está rodando.
             </p>
 
-            <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 mb-6">
-              <h3 className="text-sm font-semibold text-slate-900 mb-2">Como iniciar o backend:</h3>
-              <pre className="mt-3 bg-slate-800 text-slate-50 p-3 rounded-lg text-xs overflow-x-auto">
+            {isProduction ? (
+              <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 mb-6 space-y-4">
+                <div>
+                  <h3 className="text-sm font-semibold text-slate-900 mb-2">🔧 Configuração no Vercel:</h3>
+                  <p className="text-xs text-slate-600 mb-2">
+                    O backend precisa estar deployado e a variável <code className="bg-slate-200 px-1 rounded">VITE_API_URL</code> configurada.
+                  </p>
+                  <p className="text-xs text-slate-600 mb-3">
+                    URL configurada atualmente: <code className="bg-slate-200 px-1 rounded break-all">{currentApiUrl}</code>
+                  </p>
+                </div>
+                <div>
+                  <h3 className="text-sm font-semibold text-slate-900 mb-2">📋 Passos para resolver:</h3>
+                  <ol className="text-xs text-slate-600 space-y-1 list-decimal list-inside">
+                    <li>Deploy do backend no Vercel (ou outro serviço)</li>
+                    <li>Configurar <code className="bg-slate-200 px-1 rounded">VITE_API_URL</code> no projeto do frontend no Vercel</li>
+                    <li>Fazer redeploy do frontend</li>
+                  </ol>
+                </div>
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+                  <p className="text-xs text-blue-800">
+                    📖 Consulte o arquivo <code className="bg-blue-100 px-1 rounded">RESOLVER_BACKEND_OFFLINE.md</code> para instruções detalhadas.
+                  </p>
+                </div>
+              </div>
+            ) : (
+              <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 mb-6">
+                <h3 className="text-sm font-semibold text-slate-900 mb-2">Como iniciar o backend localmente:</h3>
+                <pre className="mt-3 bg-slate-800 text-slate-50 p-3 rounded-lg text-xs overflow-x-auto">
 {`cd backend
 npm install
 npm run db:generate
 npm run db:migrate
 npm run dev`}
-              </pre>
-            </div>
+                </pre>
+              </div>
+            )}
 
             <button
               onClick={() => {

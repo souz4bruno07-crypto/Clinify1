@@ -1,21 +1,22 @@
 /**
  * Carregar variáveis de ambiente ANTES de qualquer outro módulo
  * Este arquivo deve ser importado PRIMEIRO em index.ts
+ * 
+ * Compatível com ESM e CommonJS - não usa import.meta para evitar erros de compilação
  */
 import dotenv from 'dotenv';
 import path from 'path';
-import { fileURLToPath } from 'url';
 
 // Carregar variáveis de ambiente - MÚLTIPLAS TENTATIVAS
 // O tsx pode executar de diretórios diferentes, então tentamos vários caminhos
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+// Usamos apenas process.cwd() que funciona tanto em ESM quanto CommonJS
+const cwd = process.cwd();
 
 const possibleEnvPaths = [
-  path.resolve(process.cwd(), '.env'),                    // Pasta atual
-  path.resolve(__dirname, '../../.env'),                  // Relativo ao arquivo
-  path.join(process.cwd(), 'backend', '.env'),           // Se rodado da raiz
-  path.resolve(__dirname, '../../../backend/.env'),       // Outro caminho relativo
+  path.resolve(cwd, '.env'),                    // Pasta atual
+  path.resolve(cwd, 'backend', '.env'),          // Se rodado da raiz
+  path.resolve(cwd, '..', '.env'),               // Pasta pai
+  path.resolve(cwd, '..', 'backend', '.env'),    // Backend na pasta pai
 ];
 
 let envLoaded = false;
