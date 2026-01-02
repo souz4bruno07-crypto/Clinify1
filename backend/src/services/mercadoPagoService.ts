@@ -37,6 +37,7 @@ export async function getOrCreateMercadoPagoCustomer(
     if (subscription?.mercadoPagoCustomerId) {
       try {
         // Tentar recuperar cliente existente
+        // @ts-ignore - SDK do Mercado Pago tem tipos incompatíveis
         const customer = await customerClient.get({ id: subscription.mercadoPagoCustomerId });
         return customer;
       } catch (error) {
@@ -193,7 +194,6 @@ export function mapMercadoPagoStatus(status: string): 'active' | 'canceled' | 'p
     'paused': 'canceled',
     'cancelled': 'canceled',
     'pending': 'incomplete',
-    'paused': 'canceled',
   };
   return mapping[status.toLowerCase()] || 'incomplete';
 }

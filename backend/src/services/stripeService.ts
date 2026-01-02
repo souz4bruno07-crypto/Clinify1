@@ -11,7 +11,7 @@ let stripe: Stripe | null = null;
 if (process.env.STRIPE_SECRET_KEY && process.env.STRIPE_SECRET_KEY.length > 0) {
   try {
     stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
-      apiVersion: '2024-11-20.acacia',
+      apiVersion: '2025-12-15.clover',
     });
     logger.info('Stripe inicializado com sucesso');
   } catch (error: any) {
@@ -229,8 +229,8 @@ export async function createStripeSubscription(
       data: {
         plan: planId as any,
         status: mapStripeStatus(subscription.status),
-        startDate: new Date(subscription.current_period_start * 1000),
-        endDate: new Date(subscription.current_period_end * 1000),
+        startDate: new Date((subscription as any).current_period_start * 1000),
+        endDate: new Date((subscription as any).current_period_end * 1000),
         stripeCustomerId: customerId,
       },
     });

@@ -136,11 +136,20 @@ const ClinicalKPIsTab: React.FC<ClinicalKPIsTabProps> = ({ user, transactions })
       fetch('http://127.0.0.1:7242/ingest/7018d877-4b16-4a68-9ee6-6d7d4c606105',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'ClinicalKPIsTab.tsx:133',message:'Dados recebidos',data:{apptsType:typeof appts,apptsIsArray:Array.isArray(appts),qtsType:typeof qts,qtsIsArray:Array.isArray(qts)},timestamp:Date.now(),sessionId:'debug-session',runId:'post-fix',hypothesisId:'E'})}).catch(()=>{});
       // #endregion
       // Extrair array do objeto { data: [...] } se necessário
-      const appointmentsArray = Array.isArray(appts) ? appts : (appts?.data || []);
+      const appointmentsArray = Array.isArray(appts)
+        ? appts
+        : (appts && typeof appts === 'object' && 'data' in appts)
+          ? (appts as { data: Appointment[] }).data
+          : [];
       setAppointments(appointmentsArray);
       setQuotes(Array.isArray(qts) ? qts : []);
       // getPatients retorna PaginatedResponse, extrair o array data
-      setPatients('data' in ptsResponse ? ptsResponse.data : (ptsResponse as any));
+      const patientsData = (ptsResponse && typeof ptsResponse === 'object' && 'data' in ptsResponse)
+        ? (ptsResponse as { data: Patient[] }).data
+        : Array.isArray(ptsResponse)
+          ? ptsResponse
+          : [];
+      setPatients(patientsData);
     } finally {
       setIsLoading(false);
     }

@@ -87,9 +87,18 @@ const DashboardScreen: React.FC = () => {
         
         if (cancelled) return;
         
-        setPatients(Array.isArray(patientsResponse) ? patientsResponse : (patientsResponse?.data || []));
-        const appointmentsArray = Array.isArray(appointmentsResponse) ? appointmentsResponse : (appointmentsResponse?.data || []);
-        setAppointments(appointmentsArray);
+        const patientsData = Array.isArray(patientsResponse) 
+          ? patientsResponse 
+          : (patientsResponse && typeof patientsResponse === 'object' && 'data' in patientsResponse)
+            ? (patientsResponse as { data: Patient[] }).data
+            : [];
+        setPatients(patientsData);
+        const appointmentsData = Array.isArray(appointmentsResponse)
+          ? appointmentsResponse
+          : (appointmentsResponse && typeof appointmentsResponse === 'object' && 'data' in appointmentsResponse)
+            ? (appointmentsResponse as { data: Appointment[] }).data
+            : [];
+        setAppointments(appointmentsData);
       } catch (error) {
         console.error('[DashboardScreen] Erro ao carregar notificações:', error);
       }

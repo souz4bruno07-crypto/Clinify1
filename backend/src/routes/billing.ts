@@ -27,7 +27,7 @@ let stripe: Stripe | null = null;
 if (process.env.STRIPE_SECRET_KEY) {
   try {
     stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
-      apiVersion: '2024-11-20.acacia',
+      apiVersion: '2025-12-15.clover',
     });
   } catch (error: any) {
     logger.error('Erro ao inicializar Stripe para webhooks:', error);
@@ -90,8 +90,8 @@ router.post('/webhook/stripe', express.raw({type: 'application/json'}), async (r
           data: {
             plan: sub.metadata?.planId as any || 'basic',
             status: mapStripeStatus(sub.status),
-            startDate: new Date(sub.current_period_start * 1000),
-            endDate: new Date(sub.current_period_end * 1000),
+            startDate: new Date((sub as any).current_period_start * 1000),
+            endDate: new Date((sub as any).current_period_end * 1000),
           }
         });
         break;
@@ -111,7 +111,7 @@ router.post('/webhook/stripe', express.raw({type: 'application/json'}), async (r
       
       case 'invoice.payment_failed': {
         const invoice = event.data.object as Stripe.Invoice;
-        if (invoice.subscription) {
+        if ((invoice as any).subscription) {
           await prisma.subscription.update({
             where: { userId },
             data: { status: 'past_due' }
@@ -122,7 +122,7 @@ router.post('/webhook/stripe', express.raw({type: 'application/json'}), async (r
       
       case 'invoice.paid': {
         const invoice = event.data.object as Stripe.Invoice;
-        if (invoice.subscription) {
+        if ((invoice as any).subscription) {
           await prisma.subscription.update({
             where: { userId },
             data: { status: 'active' }

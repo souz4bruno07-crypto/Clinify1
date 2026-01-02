@@ -111,7 +111,11 @@ const CalendarTab: React.FC = () => {
         fetch('http://127.0.0.1:7242/ingest/7018d877-4b16-4a68-9ee6-6d7d4c606105',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'CalendarTab.tsx:88',message:'Dados recebidos de getAppointments',data:{apptsType:typeof appts,apptsIsArray:Array.isArray(appts),apptsLength:appts?.length},timestamp:Date.now(),sessionId:'debug-session',runId:'post-fix',hypothesisId:'A'})}).catch(()=>{});
         // #endregion
         // Garantir que appts seja sempre um array
-        const appointmentsArray = Array.isArray(appts) ? appts : (appts?.data || []);
+        const appointmentsArray = Array.isArray(appts)
+          ? appts
+          : (appts && typeof appts === 'object' && 'data' in appts)
+            ? (appts as { data: Appointment[] }).data
+            : [];
         // #region agent log
         fetch('http://127.0.0.1:7242/ingest/7018d877-4b16-4a68-9ee6-6d7d4c606105',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'CalendarTab.tsx:91',message:'Antes de setAppointments',data:{appointmentsArrayIsArray:Array.isArray(appointmentsArray),appointmentsArrayLength:appointmentsArray.length},timestamp:Date.now(),sessionId:'debug-session',runId:'post-fix',hypothesisId:'A'})}).catch(()=>{});
         // #endregion

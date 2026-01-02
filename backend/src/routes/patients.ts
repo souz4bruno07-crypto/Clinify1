@@ -78,15 +78,15 @@ router.get('/', async (req: AuthRequest, res: Response): Promise<void> => {
       setTimeout(() => reject(new Error('Query timeout após 5 segundos')), 5000)
     );
     
-    const [patients, total] = await Promise.race([queryPromise, timeoutPromise]) as [typeof patients, typeof total];
+    type PatientResult = Awaited<ReturnType<typeof prisma.patient.findMany>>;
+    const [patients, total] = await Promise.race([queryPromise, timeoutPromise]) as [PatientResult, number];
 
     const queryElapsed = Date.now() - queryStartTime;
     // #region agent log
     await debugLog({location:'patients.ts:65',message:'GET /patients query do banco concluída',data:{patientsCount:patients.length,total,queryElapsedMs:queryElapsed,limit:finalLimit,skip},hypothesisId:'A'});
     // #endregion
-
     const result = {
-      data: patients.map(p => ({
+      data: patients.map((p: PatientResult[0]) => ({
         ...p,
         user_id: p.userId,
         clinicId: req.userId,

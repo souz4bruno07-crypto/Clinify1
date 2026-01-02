@@ -178,7 +178,8 @@ const HomeTab: React.FC<HomeTabProps> = ({ user, transactions, onOpenTransaction
   const todayBirthdays = useMemo(() => {
     const today = new Date();
     return birthdays.filter(b => {
-      const bday = new Date(b.birthday);
+      if (!b.birth_date) return false;
+      const bday = new Date(b.birth_date);
       return bday.getDate() === today.getDate() && bday.getMonth() === today.getMonth();
     });
   }, [birthdays]);
@@ -189,7 +190,8 @@ const HomeTab: React.FC<HomeTabProps> = ({ user, transactions, onOpenTransaction
     const nextWeek = new Date(today);
     nextWeek.setDate(today.getDate() + 7);
     return birthdays.filter(b => {
-      const bday = new Date(b.birthday);
+      if (!b.birth_date) return false;
+      const bday = new Date(b.birth_date);
       bday.setFullYear(today.getFullYear());
       return bday >= today && bday <= nextWeek;
     }).slice(0, 3);
@@ -412,7 +414,8 @@ const HomeTab: React.FC<HomeTabProps> = ({ user, transactions, onOpenTransaction
               <div className="space-y-3">
                 <p className="text-sm font-black text-pink-900 dark:text-pink-300 mb-3">Próximos aniversários:</p>
                 {upcomingBirthdays.map((bday) => {
-                  const bdayDate = new Date(bday.birthday);
+                  if (!bday.birth_date) return null;
+                  const bdayDate = new Date(bday.birth_date);
                   const today = new Date();
                   bdayDate.setFullYear(today.getFullYear());
                   const daysUntil = Math.ceil((bdayDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));

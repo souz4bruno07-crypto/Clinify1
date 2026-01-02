@@ -210,7 +210,8 @@ export const deletePatient = async (id: string): Promise<boolean> => {
   return true;
 };
 
-export interface BirthdayPatient extends Patient {
+export interface BirthdayPatient extends Omit<Patient, 'birth_date'> {
+  birth_date: string; // Obrigatório para aniversariantes
   daysUntil: number;
 }
 
