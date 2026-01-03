@@ -77,39 +77,47 @@ class ApiClient {
       console.log(`[apiClient] ${options.method || 'GET'} ${url}`);
     }
     
-    const response = await fetch(url, {
-      ...options,
-      headers,
-    });
+    // Adicionar timeout de 60 segundos para requisições (especialmente importante para mobile)
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 60000);
+    
+    try {
+      const response = await fetch(url, {
+        ...options,
+        headers,
+        signal: controller.signal,
+      });
+      
+      clearTimeout(timeoutId);
 
-    // Log apenas em desenvolvimento
-    if (import.meta.env.DEV) {
-      console.log(`[apiClient] Response status: ${response.status} ${response.statusText}`);
-    }
-
-    if (!response.ok) {
-      let errorData: any;
-      try {
-        const errorText = await response.text();
-        if (import.meta.env.DEV) {
-          console.error(`[apiClient] Error response text:`, errorText);
-        }
-        errorData = errorText ? JSON.parse(errorText) : { error: `HTTP error! status: ${response.status}` };
-      } catch (parseError) {
-        if (import.meta.env.DEV) {
-          console.error(`[apiClient] Error parsing error response:`, parseError);
-        }
-        errorData = { error: `HTTP error! status: ${response.status}` };
+      // Log apenas em desenvolvimento
+      if (import.meta.env.DEV) {
+        console.log(`[apiClient] Response status: ${response.status} ${response.statusText}`);
       }
-      const errorMessage = errorData.error || errorData.details || errorData.message || `HTTP error! status: ${response.status}`;
-      const error = new Error(errorMessage);
-      (error as any).status = response.status;
-      (error as any).response = { data: errorData };
-      throw error;
-    }
 
-    // Handle empty responses
-    const text = await response.text();
+      if (!response.ok) {
+        let errorData: any;
+        try {
+          const errorText = await response.text();
+          if (import.meta.env.DEV) {
+            console.error(`[apiClient] Error response text:`, errorText);
+          }
+          errorData = errorText ? JSON.parse(errorText) : { error: `HTTP error! status: ${response.status}` };
+        } catch (parseError) {
+          if (import.meta.env.DEV) {
+            console.error(`[apiClient] Error parsing error response:`, parseError);
+          }
+          errorData = { error: `HTTP error! status: ${response.status}` };
+        }
+        const errorMessage = errorData.error || errorData.details || errorData.message || `HTTP error! status: ${response.status}`;
+        const error = new Error(errorMessage);
+        (error as any).status = response.status;
+        (error as any).response = { data: errorData };
+        throw error;
+      }
+
+      // Handle empty responses
+      const text = await response.text();
     
     // #region agent log
     fetch('http://127.0.0.1:7242/ingest/7018d877-4b16-4a68-9ee6-6d7d4c606105',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'apiClient.ts:113',message:'Response text recebido',data:{textLength:text?.length,textValue:text?.substring(0,100),isEmpty:!text||text.trim()===''},timestamp:Date.now(),sessionId:'debug-session',runId:'run2',hypothesisId:'H3'})}).catch(()=>{});
@@ -134,6 +142,17 @@ class ApiClient {
         console.error(`[apiClient] Text that failed to parse:`, text);
       }
       throw new Error(`Invalid JSON response: ${parseError}`);
+    }
+    } catch (error: any) {
+      clearTimeout(timeoutId);
+      // Tratar erro de timeout ou abort
+      if (error.name === 'AbortError' || error.message?.includes('aborted')) {
+        const timeoutError = new Error('Requisição cancelada por timeout (60 segundos). Verifique sua conexão.');
+        (timeoutError as any).status = 408;
+        throw timeoutError;
+      }
+      // Re-throw outros erros
+      throw error;
     }
   }
 
