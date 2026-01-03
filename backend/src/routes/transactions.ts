@@ -27,7 +27,9 @@ router.get('/', async (req: AuthRequest, res: Response): Promise<void> => {
     console.log(`[GET /transactions] Buscando transações para userId: ${userId}, page: ${page}, limit: ${finalLimit}, offset: ${skip}`);
 
     const queryStartTime = Date.now();
-    const [transactions, total] = await Promise.all([
+    
+    // Adicionar timeout para evitar travamentos em conexões lentas (mobile)
+    const queryPromise = Promise.all([
       prisma.transaction.findMany({
         where: { userId },
         select: {
@@ -51,6 +53,12 @@ router.get('/', async (req: AuthRequest, res: Response): Promise<void> => {
         where: { userId }
       })
     ]);
+    
+    const timeoutPromise = new Promise((_, reject) => 
+      setTimeout(() => reject(new Error('Query timeout após 30 segundos')), 30000)
+    );
+    
+    const [transactions, total] = await Promise.race([queryPromise, timeoutPromise]) as [Awaited<ReturnType<typeof prisma.transaction.findMany>>, number];
 
     const queryElapsed = Date.now() - queryStartTime;
     // #region agent log
@@ -648,7 +656,7 @@ router.post('/seed', async (req: AuthRequest, res: Response): Promise<void> => {
       await tx.loyaltyMember.deleteMany({ where: { userId } });
       await tx.loyaltyReward.deleteMany({ where: { userId } });
     }, {
-      timeout: 30000, // 30 segundos de timeout
+      timeout: 120000, // 120 segundos de timeout (2 minutos) para operações grandes
     });
     
     const deleteElapsed = Date.now() - deleteStartTime;
@@ -988,7 +996,8 @@ router.post('/seed', async (req: AuthRequest, res: Response): Promise<void> => {
     
     // Usar createMany em lotes para garantir que as tags sejam salvas corretamente
     // O Prisma createMany pode ter problemas com campos opcionais em grandes lotes
-    const BATCH_SIZE = 100;
+    // Aumentado para 500 para melhor performance (reduz número de queries)
+    const BATCH_SIZE = 500;
     let totalCreated = 0;
     for (let i = 0; i < mockTxs.length; i += BATCH_SIZE) {
       const batch = mockTxs.slice(i, i + BATCH_SIZE);
@@ -1360,7 +1369,13 @@ router.post('/seed', async (req: AuthRequest, res: Response): Promise<void> => {
       }
     }
 
-    await prisma.stockMovement.createMany({ data: movements });
+    // Criar movimentações em lotes para melhor performance
+    const MOVEMENT_BATCH_SIZE = 500;
+    for (let i = 0; i < movements.length; i += MOVEMENT_BATCH_SIZE) {
+      const batch = movements.slice(i, i + MOVEMENT_BATCH_SIZE);
+      await prisma.stockMovement.createMany({ data: batch });
+      console.log(`[SEED] Movimentações lote ${Math.floor(i / MOVEMENT_BATCH_SIZE) + 1}: ${batch.length} criadas`);
+    }
 
     // ============================================
     // 9. CRIAR LINKS PRODUTO-PROCEDIMENTO
@@ -1597,7 +1612,13 @@ router.post('/seed', async (req: AuthRequest, res: Response): Promise<void> => {
       }
     }
 
-    await prisma.chatMessage.createMany({ data: chatMessages });
+    // Criar mensagens em lotes para melhor performance
+    const CHAT_BATCH_SIZE = 500;
+    for (let i = 0; i < chatMessages.length; i += CHAT_BATCH_SIZE) {
+      const batch = chatMessages.slice(i, i + CHAT_BATCH_SIZE);
+      await prisma.chatMessage.createMany({ data: batch });
+      console.log(`[SEED] Mensagens lote ${Math.floor(i / CHAT_BATCH_SIZE) + 1}: ${batch.length} criadas`);
+    }
 
     // ============================================
     // 13. CRIAR CATEGORIAS PERSONALIZADAS
@@ -1864,7 +1885,13 @@ router.post('/seed', async (req: AuthRequest, res: Response): Promise<void> => {
     }
 
     if (pointsHistory.length > 0) {
-      await prisma.loyaltyPointsHistory.createMany({ data: pointsHistory });
+      // Criar histórico de pontos em lotes para melhor performance
+      const POINTS_BATCH_SIZE = 500;
+      for (let i = 0; i < pointsHistory.length; i += POINTS_BATCH_SIZE) {
+        const batch = pointsHistory.slice(i, i + POINTS_BATCH_SIZE);
+        await prisma.loyaltyPointsHistory.createMany({ data: batch });
+        console.log(`[SEED] Histórico de pontos lote ${Math.floor(i / POINTS_BATCH_SIZE) + 1}: ${batch.length} criados`);
+      }
     }
 
     // Criar alguns resgates

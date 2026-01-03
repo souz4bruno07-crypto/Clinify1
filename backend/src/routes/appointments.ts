@@ -34,7 +34,9 @@ router.get('/', async (req: AuthRequest, res: Response): Promise<void> => {
     }
 
     const queryStartTime = Date.now();
-    const [appointments, total] = await Promise.all([
+    
+    // Adicionar timeout para evitar travamentos em conexões lentas (mobile)
+    const queryPromise = Promise.all([
       prisma.appointment.findMany({
         where,
         select: {
@@ -55,6 +57,12 @@ router.get('/', async (req: AuthRequest, res: Response): Promise<void> => {
       }),
       prisma.appointment.count({ where })
     ]);
+    
+    const timeoutPromise = new Promise((_, reject) => 
+      setTimeout(() => reject(new Error('Query timeout após 30 segundos')), 30000)
+    );
+    
+    const [appointments, total] = await Promise.race([queryPromise, timeoutPromise]) as [Awaited<ReturnType<typeof prisma.appointment.findMany>>, number];
 
     const queryElapsed = Date.now() - queryStartTime;
     // #region agent log

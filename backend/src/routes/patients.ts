@@ -74,8 +74,9 @@ router.get('/', async (req: AuthRequest, res: Response): Promise<void> => {
       })
     ]);
     
+    // Aumentado timeout para 30 segundos para suportar conexões mais lentas (mobile)
     const timeoutPromise = new Promise((_, reject) => 
-      setTimeout(() => reject(new Error('Query timeout após 5 segundos')), 5000)
+      setTimeout(() => reject(new Error('Query timeout após 30 segundos')), 30000)
     );
     
     type PatientResult = Awaited<ReturnType<typeof prisma.patient.findMany>>;
