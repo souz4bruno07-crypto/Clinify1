@@ -15,9 +15,11 @@ type InventorySubTab = 'products' | 'movements' | 'reports' | 'procedures';
 
 interface InventoryMainProps {
   userId: string;
+  selectedDate: Date;
+  onDateChange: (date: Date) => void;
 }
 
-const InventoryMain: React.FC<InventoryMainProps> = ({ userId }) => {
+const InventoryMain: React.FC<InventoryMainProps> = ({ userId, selectedDate, onDateChange }) => {
   const [activeTab, setActiveTab] = useState<InventorySubTab>('products');
   const [alerts, setAlerts] = useState<StockAlert[]>([]);
   const [showAlerts, setShowAlerts] = useState(false);
@@ -137,10 +139,10 @@ const InventoryMain: React.FC<InventoryMainProps> = ({ userId }) => {
 
       {/* Tab Content */}
       <div key={refreshKey}>
-        {activeTab === 'products' && <ProductsTab userId={userId} onRefresh={handleRefresh} />}
-        {activeTab === 'movements' && <MovementsTab userId={userId} />}
-        {activeTab === 'procedures' && <ProcedureLinksTab userId={userId} />}
-        {activeTab === 'reports' && <ReportsTab userId={userId} />}
+        {activeTab === 'products' && <ProductsTab userId={userId} onRefresh={handleRefresh} selectedDate={selectedDate} />}
+        {activeTab === 'movements' && <MovementsTab userId={userId} selectedDate={selectedDate} />}
+        {activeTab === 'procedures' && <ProcedureLinksTab userId={userId} selectedDate={selectedDate} />}
+        {activeTab === 'reports' && <ReportsTab userId={userId} selectedDate={selectedDate} />}
       </div>
 
       {/* Alerts Panel */}

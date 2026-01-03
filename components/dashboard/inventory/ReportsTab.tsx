@@ -16,11 +16,12 @@ import * as XLSX from 'xlsx';
 
 interface ReportsTabProps {
   userId: string;
+  selectedDate: Date;
 }
 
 type ReportType = 'consumption' | 'valuation';
 
-const ReportsTab: React.FC<ReportsTabProps> = ({ userId }) => {
+const ReportsTab: React.FC<ReportsTabProps> = ({ userId, selectedDate }) => {
   const [reportType, setReportType] = useState<ReportType>('consumption');
   const [loading, setLoading] = useState(true);
   const [staff, setStaff] = useState<Staff[]>([]);
@@ -28,15 +29,39 @@ const ReportsTab: React.FC<ReportsTabProps> = ({ userId }) => {
   const [consumptionReport, setConsumptionReport] = useState<ConsumptionReport | null>(null);
   const [valuationReport, setValuationReport] = useState<ValuationReport | null>(null);
 
-  const [filters, setFilters] = useState({
-    startDate: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-    endDate: new Date().toISOString().split('T')[0],
-    staffId: ''
-  });
+  // Inicializar filtros com a data selecionada
+  const getInitialFilters = () => {
+    const year = selectedDate.getFullYear();
+    const month = selectedDate.getMonth();
+    const startOfMonth = new Date(year, month, 1);
+    const endOfMonth = new Date(year, month + 1, 0);
+    
+    return {
+      startDate: startOfMonth.toISOString().split('T')[0],
+      endDate: endOfMonth.toISOString().split('T')[0],
+      staffId: ''
+    };
+  };
+
+  const [filters, setFilters] = useState(() => getInitialFilters());
 
   useEffect(() => {
     loadStaff();
   }, []);
+
+  // Atualizar filtros quando a data selecionada mudar
+  useEffect(() => {
+    const year = selectedDate.getFullYear();
+    const month = selectedDate.getMonth();
+    const startOfMonth = new Date(year, month, 1);
+    const endOfMonth = new Date(year, month + 1, 0);
+    
+    setFilters(prev => ({
+      ...prev,
+      startDate: startOfMonth.toISOString().split('T')[0],
+      endDate: endOfMonth.toISOString().split('T')[0]
+    }));
+  }, [selectedDate]);
 
   useEffect(() => {
     loadReport();
@@ -139,7 +164,7 @@ const ReportsTab: React.FC<ReportsTabProps> = ({ userId }) => {
                 type="date"
                 value={filters.startDate}
                 onChange={e => setFilters(prev => ({ ...prev, startDate: e.target.value }))}
-                className="px-4 py-3 bg-slate-50 dark:bg-slate-800 border-none rounded-2xl text-sm font-medium focus:ring-2 focus:ring-teal-500"
+                className="px-4 py-3 bg-slate-50 dark:bg-slate-800 border-none rounded-2xl text-sm font-medium text-slate-900 dark:text-white focus:ring-2 focus:ring-teal-500"
               />
             </div>
 
@@ -151,7 +176,7 @@ const ReportsTab: React.FC<ReportsTabProps> = ({ userId }) => {
                 type="date"
                 value={filters.endDate}
                 onChange={e => setFilters(prev => ({ ...prev, endDate: e.target.value }))}
-                className="px-4 py-3 bg-slate-50 dark:bg-slate-800 border-none rounded-2xl text-sm font-medium focus:ring-2 focus:ring-teal-500"
+                className="px-4 py-3 bg-slate-50 dark:bg-slate-800 border-none rounded-2xl text-sm font-medium text-slate-900 dark:text-white focus:ring-2 focus:ring-teal-500"
               />
             </div>
 
@@ -162,7 +187,7 @@ const ReportsTab: React.FC<ReportsTabProps> = ({ userId }) => {
               <select
                 value={filters.staffId}
                 onChange={e => setFilters(prev => ({ ...prev, staffId: e.target.value }))}
-                className="px-4 py-3 bg-slate-50 dark:bg-slate-800 border-none rounded-2xl text-sm font-medium focus:ring-2 focus:ring-teal-500"
+                className="px-4 py-3 bg-slate-50 dark:bg-slate-800 border-none rounded-2xl text-sm font-medium text-slate-900 dark:text-white focus:ring-2 focus:ring-teal-500"
               >
                 <option value="">Todos</option>
                 {staff.map(s => (

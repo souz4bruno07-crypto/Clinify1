@@ -18,9 +18,10 @@ import { useConfirmDialog } from '../../ui/ConfirmDialog';
 
 interface ProcedureLinksTabProps {
   userId: string;
+  selectedDate: Date;
 }
 
-const ProcedureLinksTab: React.FC<ProcedureLinksTabProps> = ({ userId }) => {
+const ProcedureLinksTab: React.FC<ProcedureLinksTabProps> = ({ userId, selectedDate }) => {
   const toast = useToast();
   const { confirm } = useConfirmDialog();
   const [procedures, setProcedures] = useState<ProductProcedure[]>([]);

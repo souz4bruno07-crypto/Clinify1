@@ -13,9 +13,10 @@ import * as XLSX from 'xlsx';
 
 interface MovementsTabProps {
   userId: string;
+  selectedDate: Date;
 }
 
-const MovementsTab: React.FC<MovementsTabProps> = ({ userId }) => {
+const MovementsTab: React.FC<MovementsTabProps> = ({ userId, selectedDate }) => {
   const [movements, setMovements] = useState<StockMovement[]>([]);
   const [loading, setLoading] = useState(true);
   const [staff, setStaff] = useState<Staff[]>([]);
@@ -23,17 +24,42 @@ const MovementsTab: React.FC<MovementsTabProps> = ({ userId }) => {
   const [itemsPerPage, setItemsPerPage] = useState(20);
   const [totalMovements, setTotalMovements] = useState(0);
   
-  const [filters, setFilters] = useState({
-    type: 'all',
-    staffId: 'all',
-    startDate: '',
-    endDate: ''
-  });
+  // Inicializar filtros com a data selecionada
+  const getInitialFilters = () => {
+    const year = selectedDate.getFullYear();
+    const month = selectedDate.getMonth();
+    const startOfMonth = new Date(year, month, 1);
+    const endOfMonth = new Date(year, month + 1, 0);
+    
+    return {
+      type: 'all',
+      staffId: 'all',
+      startDate: startOfMonth.toISOString().split('T')[0],
+      endDate: endOfMonth.toISOString().split('T')[0]
+    };
+  };
+
+  const [filters, setFilters] = useState(() => getInitialFilters());
 
   useEffect(() => {
     loadMovements();
     loadStaff();
   }, []);
+
+  // Atualizar filtros quando a data selecionada mudar
+  useEffect(() => {
+    const year = selectedDate.getFullYear();
+    const month = selectedDate.getMonth();
+    const startOfMonth = new Date(year, month, 1);
+    const endOfMonth = new Date(year, month + 1, 0);
+    
+    setFilters(prev => ({
+      ...prev,
+      startDate: startOfMonth.toISOString().split('T')[0],
+      endDate: endOfMonth.toISOString().split('T')[0]
+    }));
+    setCurrentPage(1);
+  }, [selectedDate]);
 
   useEffect(() => {
     setCurrentPage(1); // Resetar para primeira página ao mudar filtros
@@ -182,7 +208,7 @@ const MovementsTab: React.FC<MovementsTabProps> = ({ userId }) => {
             <select
               value={filters.type}
               onChange={e => setFilters(prev => ({ ...prev, type: e.target.value }))}
-              className="px-4 py-3 bg-slate-50 dark:bg-slate-800 border-none rounded-2xl text-sm font-medium focus:ring-2 focus:ring-teal-500"
+              className="px-4 py-3 bg-slate-50 dark:bg-slate-800 border-none rounded-2xl text-sm font-medium text-slate-900 dark:text-white focus:ring-2 focus:ring-teal-500"
             >
               <option value="all">Todos os Tipos</option>
               <option value="entrada">Entrada</option>
@@ -200,7 +226,7 @@ const MovementsTab: React.FC<MovementsTabProps> = ({ userId }) => {
             <select
               value={filters.staffId}
               onChange={e => setFilters(prev => ({ ...prev, staffId: e.target.value }))}
-              className="px-4 py-3 bg-slate-50 dark:bg-slate-800 border-none rounded-2xl text-sm font-medium focus:ring-2 focus:ring-teal-500"
+              className="px-4 py-3 bg-slate-50 dark:bg-slate-800 border-none rounded-2xl text-sm font-medium text-slate-900 dark:text-white focus:ring-2 focus:ring-teal-500"
             >
               <option value="all">Todos</option>
               {staff.map(s => (
@@ -217,7 +243,7 @@ const MovementsTab: React.FC<MovementsTabProps> = ({ userId }) => {
               type="date"
               value={filters.startDate}
               onChange={e => setFilters(prev => ({ ...prev, startDate: e.target.value }))}
-              className="px-4 py-3 bg-slate-50 dark:bg-slate-800 border-none rounded-2xl text-sm font-medium focus:ring-2 focus:ring-teal-500"
+              className="px-4 py-3 bg-slate-50 dark:bg-slate-800 border-none rounded-2xl text-sm font-medium text-slate-900 dark:text-white focus:ring-2 focus:ring-teal-500"
             />
           </div>
 
@@ -229,7 +255,7 @@ const MovementsTab: React.FC<MovementsTabProps> = ({ userId }) => {
               type="date"
               value={filters.endDate}
               onChange={e => setFilters(prev => ({ ...prev, endDate: e.target.value }))}
-              className="px-4 py-3 bg-slate-50 dark:bg-slate-800 border-none rounded-2xl text-sm font-medium focus:ring-2 focus:ring-teal-500"
+              className="px-4 py-3 bg-slate-50 dark:bg-slate-800 border-none rounded-2xl text-sm font-medium text-slate-900 dark:text-white focus:ring-2 focus:ring-teal-500"
             />
           </div>
 

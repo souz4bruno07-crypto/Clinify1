@@ -17,9 +17,10 @@ import { useConfirmDialog } from '../../ui/ConfirmDialog';
 interface ProductsTabProps {
   userId: string;
   onRefresh: () => void;
+  selectedDate: Date;
 }
 
-const ProductsTab: React.FC<ProductsTabProps> = ({ userId, onRefresh }) => {
+const ProductsTab: React.FC<ProductsTabProps> = ({ userId, onRefresh, selectedDate }) => {
   const toast = useToast();
   const { confirm } = useConfirmDialog();
   const [products, setProducts] = useState<InventoryProduct[]>([]);

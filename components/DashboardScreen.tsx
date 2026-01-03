@@ -10,6 +10,7 @@ import {
   Sparkles, Home, ShieldCheck,
   Sun, Moon, Command, Search, Stethoscope, Package, Trophy, Activity, Gift, Loader2
 } from 'lucide-react';
+import DateSelector from './ui/DateSelector';
 
 // Lazy loading de componentes pesados
 const HomeTab = lazy(() => import('./dashboard/HomeTab'));
@@ -48,6 +49,7 @@ const LoadingFallback: React.FC<{ message?: string }> = ({ message = 'Carregando
 const DashboardScreen: React.FC = () => {
   const { user, signOut } = useAuth();
   const [currentDate, setCurrentDate] = useState(new Date());
+  const [inventoryDate, setInventoryDate] = useState(new Date());
   const { transactions, categories, isLoading, refreshData } = useFinancialData(user?.clinicId);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isTransactionModalOpen, setIsTransactionModalOpen] = useState(false);
@@ -354,6 +356,14 @@ const DashboardScreen: React.FC = () => {
                 </kbd>
               </button>
 
+              {/* Date Selector - Mostrar apenas na rota de estoque */}
+              {location.pathname.startsWith('/dashboard/estoque') && (
+                <DateSelector
+                  selectedDate={inventoryDate}
+                  onDateChange={setInventoryDate}
+                />
+              )}
+
               {/* Theme Toggle */}
               <button 
                 onClick={() => setIsDarkMode(!isDarkMode)} 
@@ -433,7 +443,7 @@ const DashboardScreen: React.FC = () => {
             <Route path="agenda" element={canAccess('agenda') ? <CalendarTab /> : <Navigate to="/dashboard/home" />} />
             <Route path="crm" element={canAccess('crm') ? <CRMTab user={user} /> : <Navigate to="/dashboard/home" />} />
             <Route path="orcamentos" element={canAccess('orcamentos') ? <BudgetsTab user={user} /> : <Navigate to="/dashboard/home" />} />
-            <Route path="estoque" element={canAccess('estoque') ? <InventoryMain userId={user?.clinicId || ''} /> : <Navigate to="/dashboard/home" />} />
+            <Route path="estoque" element={canAccess('estoque') ? <InventoryMain userId={user?.clinicId || ''} selectedDate={inventoryDate} onDateChange={setInventoryDate} /> : <Navigate to="/dashboard/home" />} />
             <Route path="fidelidade" element={canAccess('finance') ? <LoyaltyAdminTab clinicId={user?.clinicId || ''} patients={patients} /> : <Navigate to="/dashboard/home" />} />
             <Route path="configuracoes" element={canAccess('settings') ? <SettingsTab user={user} refreshTransactions={refreshData} /> : <Navigate to="/dashboard/home" />} />
             
