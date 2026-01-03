@@ -33,6 +33,8 @@ export interface Transaction {
   paymentMethod?: string;
   isPaid?: boolean;
   tags?: string;
+  installments?: number;
+  cardFee?: number;
 }
 
 export interface Category {

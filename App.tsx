@@ -23,13 +23,30 @@ const BackendChecker: React.FC<{ children: React.ReactNode }> = ({ children }) =
 
   const checkBackend = async () => {
     try {
-      const response = await fetch(`${baseUrl}/health`, { method: 'GET' });
+      const healthUrl = `${baseUrl}/health`;
+      console.log('🔍 Verificando backend:', healthUrl);
+      console.log('📋 VITE_API_URL:', import.meta.env.VITE_API_URL);
+      console.log('📋 Base URL:', baseUrl);
+      
+      const response = await fetch(healthUrl, { 
+        method: 'GET',
+        headers: {
+          'Accept': 'application/json'
+        }
+      });
+      
+      console.log('📡 Resposta do backend:', response.status, response.statusText);
+      
       if (response.ok) {
+        const data = await response.json();
+        console.log('✅ Backend online:', data);
         setBackendStatus('online');
       } else {
+        console.error('❌ Backend retornou erro:', response.status, response.statusText);
         setBackendStatus('offline');
       }
-    } catch {
+    } catch (error) {
+      console.error('❌ Erro ao conectar ao backend:', error);
       setBackendStatus('offline');
     }
   };

@@ -115,3 +115,4 @@ Para mais detalhes, consulte: **GUIA_DEPLOY_VERCEL.md**
 **🎉 Pronto! Seu Clinify está no ar!**
 
 
+

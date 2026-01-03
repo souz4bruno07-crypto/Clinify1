@@ -39,7 +39,9 @@ const TransactionModal: React.FC<TransactionModalProps> = ({
     paymentMethod: 'pix',
     isPaid: true,
     patientName: '',
-    tags: ''
+    tags: '',
+    installments: 1,
+    cardFee: 0
   });
 
   const paymentMethods = [
@@ -64,7 +66,9 @@ const TransactionModal: React.FC<TransactionModalProps> = ({
           paymentMethod: (editingTransaction as any).paymentMethod || 'pix',
           isPaid: (editingTransaction as any).isPaid ?? true,
           patientName: editingTransaction.patientName || '',
-          tags: (editingTransaction as any).tags || ''
+          tags: (editingTransaction as any).tags || '',
+          installments: (editingTransaction as any).installments || 1,
+          cardFee: (editingTransaction as any).cardFee || 0
         });
       } else {
         setFormData({
@@ -76,7 +80,9 @@ const TransactionModal: React.FC<TransactionModalProps> = ({
           paymentMethod: 'pix',
           isPaid: true,
           patientName: '',
-          tags: ''
+          tags: '',
+          installments: 1,
+          cardFee: 0
         });
       }
     }
@@ -117,17 +123,25 @@ const TransactionModal: React.FC<TransactionModalProps> = ({
       return;
     }
 
+    // Calcular valor com taxa de cartão se aplicável
+    let finalAmount = amountVal;
+    if (formData.paymentMethod === 'credit' && formData.cardFee > 0) {
+      finalAmount = amountVal * (1 + formData.cardFee / 100);
+    }
+
     const data = {
       userId: user.id,
       description: formData.desc,
-      amount: amountVal,
+      amount: finalAmount,
       type: formData.type,
       category: formData.category,
       date: new Date(formData.date + 'T12:00:00').getTime(),
       patientName: formData.type === 'revenue' ? formData.patientName : undefined,
       paymentMethod: formData.paymentMethod,
       isPaid: formData.isPaid,
-      tags: formData.tags
+      tags: formData.tags,
+      installments: formData.paymentMethod === 'credit' ? formData.installments : undefined,
+      cardFee: formData.paymentMethod === 'credit' ? formData.cardFee : undefined
     };
 
     try {
@@ -291,7 +305,15 @@ const TransactionModal: React.FC<TransactionModalProps> = ({
                                     <button 
                                       key={m.id} 
                                       type="button" 
-                                      onClick={() => setFormData({...formData, paymentMethod: m.id})} 
+                                      onClick={() => {
+                                        const newData = {...formData, paymentMethod: m.id};
+                                        // Reset parcelas e taxa se não for cartão
+                                        if (m.id !== 'credit') {
+                                          newData.installments = 1;
+                                          newData.cardFee = 0;
+                                        }
+                                        setFormData(newData);
+                                      }} 
                                       className={`flex items-center gap-2 p-3 rounded-xl border-2 transition-all ${formData.paymentMethod === m.id ? 'border-indigo-500 bg-indigo-50 dark:bg-indigo-900/10 text-indigo-600' : 'border-slate-100 dark:border-slate-800 text-slate-600 dark:text-slate-400'}`}
                                       aria-pressed={formData.paymentMethod === m.id}
                                     >
@@ -301,6 +323,77 @@ const TransactionModal: React.FC<TransactionModalProps> = ({
                                 ))}
                             </div>
                         </div>
+
+                        {/* Campos de cartão de crédito */}
+                        {formData.paymentMethod === 'credit' && (
+                          <div className="space-y-4 p-4 bg-indigo-50 dark:bg-indigo-900/10 rounded-2xl border border-indigo-200 dark:border-indigo-800">
+                            <div>
+                              <label htmlFor="installments" className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1 block mb-2">
+                                Parcelas
+                              </label>
+                              <select
+                                id="installments"
+                                value={formData.installments}
+                                onChange={e => setFormData({...formData, installments: parseInt(e.target.value) || 1})}
+                                className="w-full bg-white dark:bg-slate-800 border-none rounded-xl py-3 px-4 font-bold text-sm text-slate-900 dark:text-white focus:ring-2 focus:ring-indigo-500"
+                              >
+                                {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map(num => (
+                                  <option key={num} value={num}>
+                                    {num}x {num === 1 ? 'sem juros' : ''}
+                                  </option>
+                                ))}
+                              </select>
+                            </div>
+
+                            <div>
+                              <label htmlFor="cardFee" className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1 block mb-2">
+                                Taxa do Cartão (%)
+                              </label>
+                              <div className="relative">
+                                <input
+                                  id="cardFee"
+                                  type="number"
+                                  step="0.01"
+                                  min="0"
+                                  max="100"
+                                  value={formData.cardFee}
+                                  onChange={e => setFormData({...formData, cardFee: parseFloat(e.target.value) || 0})}
+                                  className="w-full bg-white dark:bg-slate-800 border-none rounded-xl py-3 px-4 font-bold text-sm text-slate-900 dark:text-white focus:ring-2 focus:ring-indigo-500"
+                                  placeholder="0,00"
+                                />
+                                <span className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 font-bold text-sm">%</span>
+                              </div>
+                              {formData.cardFee > 0 && formData.amount && (
+                                <div className="mt-2 p-3 bg-white dark:bg-slate-800 rounded-xl">
+                                  <div className="flex justify-between items-center text-xs">
+                                    <span className="text-slate-500 font-bold">Valor original:</span>
+                                    <span className="text-slate-900 dark:text-white font-black">{formatCurrency(parseCurrencyInput(formData.amount))}</span>
+                                  </div>
+                                  <div className="flex justify-between items-center text-xs mt-1">
+                                    <span className="text-slate-500 font-bold">Taxa ({formData.cardFee}%):</span>
+                                    <span className="text-rose-500 font-black">
+                                      +{formatCurrency(parseCurrencyInput(formData.amount) * (formData.cardFee / 100))}
+                                    </span>
+                                  </div>
+                                  <div className="flex justify-between items-center text-sm mt-2 pt-2 border-t border-slate-200 dark:border-slate-700">
+                                    <span className="text-slate-700 dark:text-slate-300 font-black">Valor final:</span>
+                                    <span className="text-indigo-600 dark:text-indigo-400 font-black text-lg">
+                                      {formatCurrency(parseCurrencyInput(formData.amount) * (1 + formData.cardFee / 100))}
+                                    </span>
+                                  </div>
+                                  {formData.installments > 1 && (
+                                    <div className="flex justify-between items-center text-xs mt-2 pt-2 border-t border-slate-200 dark:border-slate-700">
+                                      <span className="text-slate-500 font-bold">Valor por parcela:</span>
+                                      <span className="text-slate-900 dark:text-white font-black">
+                                        {formatCurrency((parseCurrencyInput(formData.amount) * (1 + formData.cardFee / 100)) / formData.installments)}
+                                      </span>
+                                    </div>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        )}
 
                         <div>
                             <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Status</label>

@@ -94,11 +94,43 @@ const heavyOperationLimiter = rateLimit({
 });
 
 // Middlewares
+// CORS - permitir requisições do frontend e health checks
 app.use(cors({
-  origin: env.FRONTEND_URL,
-  credentials: true
+  origin: (origin, callback) => {
+    // Permitir requisições sem origin (como health checks diretos)
+    if (!origin) {
+      return callback(null, true);
+    }
+    // Permitir requisições do frontend configurado
+    if (origin === env.FRONTEND_URL || origin.startsWith(env.FRONTEND_URL)) {
+      return callback(null, true);
+    }
+    // Em desenvolvimento, permitir localhost
+    if (env.NODE_ENV === 'development' && origin.includes('localhost')) {
+      return callback(null, true);
+    }
+    callback(new Error('Not allowed by CORS'));
+  },
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization']
 }));
 app.use(express.json());
+
+// Rota raiz - informações da API
+app.get('/', (_, res) => {
+  res.json({
+    name: 'Clinify Backend API',
+    status: 'online',
+    version: '1.0.0',
+    endpoints: {
+      health: '/health',
+      api: '/api',
+      docs: '/api/docs'
+    },
+    timestamp: new Date().toISOString()
+  });
+});
 
 // Health check
 app.get('/health', (_, res) => {

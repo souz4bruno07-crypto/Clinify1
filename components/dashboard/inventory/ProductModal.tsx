@@ -129,7 +129,7 @@ const ProductModal: React.FC<ProductModalProps> = ({ product, onClose, onSave })
                 type="text"
                 value={formData.name}
                 onChange={e => setFormData(prev => ({ ...prev, name: e.target.value }))}
-                className="w-full px-5 py-4 bg-slate-50 dark:bg-slate-800 border-none rounded-2xl text-lg font-bold focus:ring-2 focus:ring-teal-500"
+                className="w-full px-5 py-4 bg-slate-50 dark:bg-slate-800 border-none rounded-2xl text-lg font-bold text-slate-900 dark:text-white focus:ring-2 focus:ring-teal-500"
                 placeholder="Ex: Toxina Botulínica 100U"
                 required
               />
@@ -148,7 +148,7 @@ const ProductModal: React.FC<ProductModalProps> = ({ product, onClose, onSave })
                   value={formData.barcode}
                   onChange={e => setFormData(prev => ({ ...prev, barcode: e.target.value }))}
                   onBlur={handleBarcodeCheck}
-                  className="w-full pl-12 pr-4 py-4 bg-slate-50 dark:bg-slate-800 border-none rounded-2xl font-mono focus:ring-2 focus:ring-teal-500"
+                  className="w-full pl-12 pr-4 py-4 bg-slate-50 dark:bg-slate-800 border-none rounded-2xl font-mono text-slate-900 dark:text-white focus:ring-2 focus:ring-teal-500"
                   placeholder="789123456789"
                 />
                 {barcodeLoading && (
@@ -166,7 +166,7 @@ const ProductModal: React.FC<ProductModalProps> = ({ product, onClose, onSave })
                 type="text"
                 value={formData.sku}
                 onChange={e => setFormData(prev => ({ ...prev, sku: e.target.value }))}
-                className="w-full px-5 py-4 bg-slate-50 dark:bg-slate-800 border-none rounded-2xl font-mono focus:ring-2 focus:ring-teal-500"
+                className="w-full px-5 py-4 bg-slate-50 dark:bg-slate-800 border-none rounded-2xl font-mono text-slate-900 dark:text-white focus:ring-2 focus:ring-teal-500"
                 placeholder="PROD-001"
               />
             </div>
@@ -179,7 +179,7 @@ const ProductModal: React.FC<ProductModalProps> = ({ product, onClose, onSave })
               <select
                 value={formData.category}
                 onChange={e => setFormData(prev => ({ ...prev, category: e.target.value }))}
-                className="w-full px-5 py-4 bg-slate-50 dark:bg-slate-800 border-none rounded-2xl font-medium focus:ring-2 focus:ring-teal-500"
+                className="w-full px-5 py-4 bg-slate-50 dark:bg-slate-800 border-none rounded-2xl font-medium text-slate-900 dark:text-white focus:ring-2 focus:ring-teal-500"
               >
                 {DEFAULT_INVENTORY_CATEGORIES.map(cat => (
                   <option key={cat} value={cat}>{cat}</option>
@@ -195,7 +195,7 @@ const ProductModal: React.FC<ProductModalProps> = ({ product, onClose, onSave })
               <select
                 value={formData.unit}
                 onChange={e => setFormData(prev => ({ ...prev, unit: e.target.value as ProductUnit }))}
-                className="w-full px-5 py-4 bg-slate-50 dark:bg-slate-800 border-none rounded-2xl font-medium focus:ring-2 focus:ring-teal-500"
+                className="w-full px-5 py-4 bg-slate-50 dark:bg-slate-800 border-none rounded-2xl font-medium text-slate-900 dark:text-white focus:ring-2 focus:ring-teal-500"
               >
                 {PRODUCT_UNITS.map(unit => (
                   <option key={unit.value} value={unit.value}>{unit.label}</option>
@@ -215,7 +215,7 @@ const ProductModal: React.FC<ProductModalProps> = ({ product, onClose, onSave })
                   min="0"
                   value={formData.currentStock}
                   onChange={e => setFormData(prev => ({ ...prev, currentStock: parseFloat(e.target.value) || 0 }))}
-                  className="w-full px-5 py-4 bg-slate-50 dark:bg-slate-800 border-none rounded-2xl font-bold focus:ring-2 focus:ring-teal-500"
+                  className="w-full px-5 py-4 bg-slate-50 dark:bg-slate-800 border-none rounded-2xl font-bold text-slate-900 dark:text-white focus:ring-2 focus:ring-teal-500"
                 />
               </div>
             )}
@@ -225,15 +225,15 @@ const ProductModal: React.FC<ProductModalProps> = ({ product, onClose, onSave })
               <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-2">
                 Estoque Mínimo
               </label>
-              <input
-                type="number"
-                step="0.001"
-                min="0"
-                value={formData.minStock}
-                onChange={e => setFormData(prev => ({ ...prev, minStock: parseFloat(e.target.value) || 0 }))}
-                className="w-full px-5 py-4 bg-slate-50 dark:bg-slate-800 border-none rounded-2xl font-bold focus:ring-2 focus:ring-teal-500"
-                placeholder="Quantidade para alerta"
-              />
+                <input
+                  type="number"
+                  step="0.001"
+                  min="0"
+                  value={formData.minStock}
+                  onChange={e => setFormData(prev => ({ ...prev, minStock: parseFloat(e.target.value) || 0 }))}
+                  className="w-full px-5 py-4 bg-slate-50 dark:bg-slate-800 border-none rounded-2xl font-bold text-slate-900 dark:text-white focus:ring-2 focus:ring-teal-500"
+                  placeholder="Quantidade para alerta"
+                />
             </div>
 
             {/* Estoque Máximo */}
@@ -241,14 +241,14 @@ const ProductModal: React.FC<ProductModalProps> = ({ product, onClose, onSave })
               <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-2">
                 Estoque Máximo (opcional)
               </label>
-              <input
-                type="number"
-                step="0.001"
-                min="0"
-                value={formData.maxStock || ''}
-                onChange={e => setFormData(prev => ({ ...prev, maxStock: e.target.value ? parseFloat(e.target.value) : undefined }))}
-                className="w-full px-5 py-4 bg-slate-50 dark:bg-slate-800 border-none rounded-2xl font-bold focus:ring-2 focus:ring-teal-500"
-              />
+                <input
+                  type="number"
+                  step="0.001"
+                  min="0"
+                  value={formData.maxStock || ''}
+                  onChange={e => setFormData(prev => ({ ...prev, maxStock: e.target.value ? parseFloat(e.target.value) : undefined }))}
+                  className="w-full px-5 py-4 bg-slate-50 dark:bg-slate-800 border-none rounded-2xl font-bold text-slate-900 dark:text-white focus:ring-2 focus:ring-teal-500"
+                />
             </div>
 
             {/* Preço de Custo */}
@@ -256,15 +256,15 @@ const ProductModal: React.FC<ProductModalProps> = ({ product, onClose, onSave })
               <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-2">
                 Preço de Custo (R$)
               </label>
-              <input
-                type="number"
-                step="0.01"
-                min="0"
-                value={formData.costPrice}
-                onChange={e => setFormData(prev => ({ ...prev, costPrice: parseFloat(e.target.value) || 0 }))}
-                className="w-full px-5 py-4 bg-slate-50 dark:bg-slate-800 border-none rounded-2xl font-bold focus:ring-2 focus:ring-teal-500"
-                placeholder="0,00"
-              />
+                <input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={formData.costPrice}
+                  onChange={e => setFormData(prev => ({ ...prev, costPrice: parseFloat(e.target.value) || 0 }))}
+                  className="w-full px-5 py-4 bg-slate-50 dark:bg-slate-800 border-none rounded-2xl font-bold text-slate-900 dark:text-white focus:ring-2 focus:ring-teal-500"
+                  placeholder="0,00"
+                />
             </div>
 
             {/* Preço de Venda */}
@@ -272,15 +272,15 @@ const ProductModal: React.FC<ProductModalProps> = ({ product, onClose, onSave })
               <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-2">
                 Preço de Venda (opcional)
               </label>
-              <input
-                type="number"
-                step="0.01"
-                min="0"
-                value={formData.salePrice || ''}
-                onChange={e => setFormData(prev => ({ ...prev, salePrice: e.target.value ? parseFloat(e.target.value) : undefined }))}
-                className="w-full px-5 py-4 bg-slate-50 dark:bg-slate-800 border-none rounded-2xl font-bold focus:ring-2 focus:ring-teal-500"
-                placeholder="0,00"
-              />
+                <input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={formData.salePrice || ''}
+                  onChange={e => setFormData(prev => ({ ...prev, salePrice: e.target.value ? parseFloat(e.target.value) : undefined }))}
+                  className="w-full px-5 py-4 bg-slate-50 dark:bg-slate-800 border-none rounded-2xl font-bold text-slate-900 dark:text-white focus:ring-2 focus:ring-teal-500"
+                  placeholder="0,00"
+                />
             </div>
 
             {/* Fornecedor */}
@@ -292,7 +292,7 @@ const ProductModal: React.FC<ProductModalProps> = ({ product, onClose, onSave })
                 type="text"
                 value={formData.supplier}
                 onChange={e => setFormData(prev => ({ ...prev, supplier: e.target.value }))}
-                className="w-full px-5 py-4 bg-slate-50 dark:bg-slate-800 border-none rounded-2xl font-medium focus:ring-2 focus:ring-teal-500"
+                className="w-full px-5 py-4 bg-slate-50 dark:bg-slate-800 border-none rounded-2xl font-medium text-slate-900 dark:text-white focus:ring-2 focus:ring-teal-500"
                 placeholder="Nome do fornecedor"
               />
             </div>
@@ -306,7 +306,7 @@ const ProductModal: React.FC<ProductModalProps> = ({ product, onClose, onSave })
                 type="text"
                 value={formData.location}
                 onChange={e => setFormData(prev => ({ ...prev, location: e.target.value }))}
-                className="w-full px-5 py-4 bg-slate-50 dark:bg-slate-800 border-none rounded-2xl font-medium focus:ring-2 focus:ring-teal-500"
+                className="w-full px-5 py-4 bg-slate-50 dark:bg-slate-800 border-none rounded-2xl font-medium text-slate-900 dark:text-white focus:ring-2 focus:ring-teal-500"
                 placeholder="Ex: Armário 2, Prateleira A"
               />
             </div>
@@ -320,7 +320,7 @@ const ProductModal: React.FC<ProductModalProps> = ({ product, onClose, onSave })
                 type="text"
                 value={formData.batchNumber}
                 onChange={e => setFormData(prev => ({ ...prev, batchNumber: e.target.value }))}
-                className="w-full px-5 py-4 bg-slate-50 dark:bg-slate-800 border-none rounded-2xl font-mono focus:ring-2 focus:ring-teal-500"
+                className="w-full px-5 py-4 bg-slate-50 dark:bg-slate-800 border-none rounded-2xl font-mono text-slate-900 dark:text-white focus:ring-2 focus:ring-teal-500"
                 placeholder="LOTE2024-001"
               />
             </div>
@@ -334,7 +334,7 @@ const ProductModal: React.FC<ProductModalProps> = ({ product, onClose, onSave })
                 type="date"
                 value={formData.expirationDate}
                 onChange={e => setFormData(prev => ({ ...prev, expirationDate: e.target.value }))}
-                className="w-full px-5 py-4 bg-slate-50 dark:bg-slate-800 border-none rounded-2xl font-medium focus:ring-2 focus:ring-teal-500"
+                className="w-full px-5 py-4 bg-slate-50 dark:bg-slate-800 border-none rounded-2xl font-medium text-slate-900 dark:text-white focus:ring-2 focus:ring-teal-500"
               />
             </div>
 
@@ -347,7 +347,7 @@ const ProductModal: React.FC<ProductModalProps> = ({ product, onClose, onSave })
                 value={formData.description}
                 onChange={e => setFormData(prev => ({ ...prev, description: e.target.value }))}
                 rows={3}
-                className="w-full px-5 py-4 bg-slate-50 dark:bg-slate-800 border-none rounded-2xl font-medium focus:ring-2 focus:ring-teal-500 resize-none"
+                className="w-full px-5 py-4 bg-slate-50 dark:bg-slate-800 border-none rounded-2xl font-medium text-slate-900 dark:text-white focus:ring-2 focus:ring-teal-500 resize-none"
                 placeholder="Informações adicionais sobre o produto..."
               />
             </div>

@@ -631,7 +631,7 @@ const LoyaltyAdminTab: React.FC<LoyaltyAdminTabProps> = ({ clinicId, patients })
                   <input 
                     type="number" 
                     defaultValue={100}
-                    className="w-20 px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-right font-bold"
+                    className="w-20 px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-right font-bold text-slate-900 dark:text-white"
                   />
                   <span className="text-sm text-slate-400">pts</span>
                 </div>
@@ -646,7 +646,7 @@ const LoyaltyAdminTab: React.FC<LoyaltyAdminTabProps> = ({ clinicId, patients })
                   <input 
                     type="number" 
                     defaultValue={50}
-                    className="w-20 px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-right font-bold"
+                    className="w-20 px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-right font-bold text-slate-900 dark:text-white"
                   />
                   <span className="text-sm text-slate-400">pts</span>
                 </div>
@@ -661,7 +661,7 @@ const LoyaltyAdminTab: React.FC<LoyaltyAdminTabProps> = ({ clinicId, patients })
                   <input 
                     type="number" 
                     defaultValue={500}
-                    className="w-20 px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-right font-bold"
+                    className="w-20 px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-right font-bold text-slate-900 dark:text-white"
                   />
                   <span className="text-sm text-slate-400">pts</span>
                 </div>
@@ -676,7 +676,7 @@ const LoyaltyAdminTab: React.FC<LoyaltyAdminTabProps> = ({ clinicId, patients })
                   <input 
                     type="number" 
                     defaultValue={50}
-                    className="w-20 px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-right font-bold"
+                    className="w-20 px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-right font-bold text-slate-900 dark:text-white"
                   />
                   <span className="text-sm text-slate-400">pts</span>
                 </div>
@@ -716,7 +716,7 @@ const LoyaltyAdminTab: React.FC<LoyaltyAdminTabProps> = ({ clinicId, patients })
                       <input 
                         type="number" 
                         defaultValue={level.minPoints}
-                        className="w-24 px-3 py-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-right font-bold text-sm"
+                        className="w-24 px-3 py-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-right font-bold text-sm text-slate-900 dark:text-white"
                       />
                     </div>
                     {level.maxPoints !== Infinity && (
@@ -725,7 +725,7 @@ const LoyaltyAdminTab: React.FC<LoyaltyAdminTabProps> = ({ clinicId, patients })
                         <input 
                           type="number" 
                           defaultValue={level.maxPoints}
-                          className="w-24 px-3 py-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-right font-bold text-sm"
+                          className="w-24 px-3 py-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-right font-bold text-sm text-slate-900 dark:text-white"
                         />
                       </div>
                     )}

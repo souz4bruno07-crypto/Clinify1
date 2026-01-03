@@ -92,7 +92,7 @@ const ProcedureLinksTab: React.FC<ProcedureLinksTabProps> = ({ userId }) => {
               placeholder="Buscar procedimento..."
               value={searchTerm}
               onChange={e => setSearchTerm(e.target.value)}
-              className="w-full pl-12 pr-4 py-3 bg-slate-50 dark:bg-slate-800 border-none rounded-2xl text-sm font-medium focus:ring-2 focus:ring-teal-500"
+              className="w-full pl-12 pr-4 py-3 bg-slate-50 dark:bg-slate-800 border-none rounded-2xl text-sm font-medium text-slate-900 dark:text-white focus:ring-2 focus:ring-teal-500"
             />
           </div>
 
@@ -329,7 +329,7 @@ const ProcedureLinkModal: React.FC<ProcedureLinkModalProps> = ({ products, onClo
             <select
               value={formData.productId}
               onChange={e => setFormData(prev => ({ ...prev, productId: e.target.value }))}
-              className="w-full px-5 py-4 bg-slate-50 dark:bg-slate-800 border-none rounded-2xl font-medium focus:ring-2 focus:ring-violet-500"
+              className="w-full px-5 py-4 bg-slate-50 dark:bg-slate-800 border-none rounded-2xl font-medium text-slate-900 dark:text-white focus:ring-2 focus:ring-violet-500"
               required
             >
               <option value="">Selecione um produto</option>
@@ -350,7 +350,7 @@ const ProcedureLinkModal: React.FC<ProcedureLinkModalProps> = ({ products, onClo
               type="text"
               value={formData.procedureName}
               onChange={e => setFormData(prev => ({ ...prev, procedureName: e.target.value }))}
-              className="w-full px-5 py-4 bg-slate-50 dark:bg-slate-800 border-none rounded-2xl font-medium focus:ring-2 focus:ring-violet-500"
+              className="w-full px-5 py-4 bg-slate-50 dark:bg-slate-800 border-none rounded-2xl font-medium text-slate-900 dark:text-white focus:ring-2 focus:ring-violet-500"
               placeholder="Nome do procedimento"
               list="procedures-list"
               required
@@ -373,7 +373,7 @@ const ProcedureLinkModal: React.FC<ProcedureLinkModalProps> = ({ products, onClo
               min="0.001"
               value={formData.quantityPerUse}
               onChange={e => setFormData(prev => ({ ...prev, quantityPerUse: parseFloat(e.target.value) || 1 }))}
-              className="w-full px-5 py-4 bg-slate-50 dark:bg-slate-800 border-none rounded-2xl font-bold focus:ring-2 focus:ring-violet-500"
+              className="w-full px-5 py-4 bg-slate-50 dark:bg-slate-800 border-none rounded-2xl font-bold text-slate-900 dark:text-white focus:ring-2 focus:ring-violet-500"
             />
           </div>
 
@@ -400,7 +400,7 @@ const ProcedureLinkModal: React.FC<ProcedureLinkModalProps> = ({ products, onClo
               value={formData.notes}
               onChange={e => setFormData(prev => ({ ...prev, notes: e.target.value }))}
               rows={2}
-              className="w-full px-5 py-4 bg-slate-50 dark:bg-slate-800 border-none rounded-2xl font-medium focus:ring-2 focus:ring-violet-500 resize-none"
+              className="w-full px-5 py-4 bg-slate-50 dark:bg-slate-800 border-none rounded-2xl font-medium text-slate-900 dark:text-white focus:ring-2 focus:ring-violet-500 resize-none"
               placeholder="Informações adicionais..."
             />
           </div>

@@ -145,3 +145,4 @@ git remote set-url origin https://github.com/souz4bruno07-crypto/Clinify1.git
 **🎉 Pronto! Após o push, seu código estará no GitHub e pronto para deploy no Vercel!**
 
 
+

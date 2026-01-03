@@ -193,6 +193,50 @@ Após o redeploy do frontend terminar:
 
 #### 🔍 Se ainda aparecer "Backend Offline":
 
+**1. Verificar Console do Navegador (IMPORTANTE):**
+
+Abra o Console do navegador (F12 ou Cmd+Option+I) e procure por:
+- `🔍 Verificando backend:` - mostra a URL que está sendo usada
+- `📋 VITE_API_URL:` - mostra se a variável está carregada
+- `❌ Erro ao conectar ao backend:` - mostra o erro específico
+
+**2. Verificar se VITE_API_URL está configurada corretamente:**
+
+No Vercel (projeto do frontend):
+- Settings → Environment Variables
+- Verifique se `VITE_API_URL` existe
+- Valor deve ser: `https://clinify-backend.vercel.app/api` (com `/api` no final)
+- Deve estar marcada para **Production**
+
+**3. Verificar se FRONTEND_URL está configurada no backend:**
+
+No Vercel (projeto do backend):
+- Settings → Environment Variables
+- Verifique se `FRONTEND_URL` existe
+- Valor deve ser a URL do seu frontend (ex: `https://clinify-six.vercel.app`)
+- Deve estar marcada para **Production**
+
+**4. Verificar CORS:**
+
+Se o console mostrar erro de CORS:
+- O `FRONTEND_URL` no backend deve corresponder exatamente à URL do frontend
+- Sem `http://` ou `https://` errado
+- Sem barra `/` no final
+
+**5. Limpar cache do navegador:**
+
+- Chrome/Edge: `Ctrl+Shift+R` (Windows) ou `Cmd+Shift+R` (Mac)
+- Firefox: `Ctrl+F5` (Windows) ou `Cmd+Shift+R` (Mac)
+- Ou abra em uma aba anônima/privada
+
+**6. Verificar se o redeploy foi feito:**
+
+- Variáveis `VITE_*` são incluídas no **build**
+- Se você adicionou a variável mas não fez redeploy, ela não estará disponível
+- **Sempre faça redeploy após adicionar variáveis VITE_***
+
+#### 🔍 Se ainda aparecer "Backend Offline":
+
 1. **Limpe o cache do navegador**: 
    - Chrome/Edge: `Ctrl+Shift+R` (Windows) ou `Cmd+Shift+R` (Mac)
    - Firefox: `Ctrl+F5` (Windows) ou `Cmd+Shift+R` (Mac)
@@ -445,9 +489,52 @@ export default app;  // Exporta o handler
 #### 🔍 **Análise do Problema (Root Cause)**
 
 **O que está acontecendo:**
-- O handler está sendo encontrado (não é mais 404)
-- Mas a função está crashando ao executar
+- O handler está sendo encontrado (não é mais 404) ✅
+- Mas a função está **crashando durante a inicialização** (antes de processar requisições) ❌
 - Código de erro: `FUNCTION_INVOCATION_FAILED`
+- HTTP Status: `500 INTERNAL_SERVER_ERROR`
+
+**Por que o erro ocorreu:**
+- A função serverless do Vercel é executada quando uma requisição chega
+- Durante a inicialização, o código tenta:
+  1. Importar módulos (`import` statements)
+  2. Carregar variáveis de ambiente
+  3. Validar configurações
+  4. Inicializar o app Express
+- Se **qualquer uma dessas etapas falhar** (lançar uma exceção não tratada), a função crasha
+- O Vercel retorna `500 FUNCTION_INVOCATION_FAILED` porque a função não conseguiu inicializar
+
+**O que o código estava fazendo vs. o que deveria fazer:**
+
+**O que estava acontecendo:**
+```typescript
+// No top-level do módulo (executado imediatamente ao importar)
+export const env = validateEnv(); // ← Se isso lançar erro, a função crasha ANTES de executar
+```
+
+**O que deveria fazer:**
+```typescript
+// Validar de forma segura, capturando erros
+try {
+  env = validateEnv();
+} catch (error) {
+  // Logar o erro de forma clara
+  // Re-lançar com mensagem mais útil
+  throw new Error(`Configuração inválida: ${error.message}`);
+}
+```
+
+**Condições que desencadearam o erro:**
+1. **Variáveis de ambiente faltando**: `DATABASE_URL` ou `JWT_SECRET` não configuradas no Vercel
+2. **Validação lançando erro**: O código lança `throw new Error()` quando faltam variáveis
+3. **Erro não tratado**: O erro é lançado no top-level do módulo, crashando a função
+4. **Importação falhando**: Se algum módulo não pode ser importado, a função crasha
+
+**O que foi corrigido:**
+1. ✅ Melhorado tratamento de erros na validação de ambiente
+2. ✅ Mensagens de erro mais claras e úteis
+3. ✅ Logs adicionais para ajudar no debug
+4. ✅ Handler `api/index.js` simplificado e robusto
 
 **Possíveis causas:**
 1. **Variáveis de ambiente não configuradas** no Vercel
@@ -488,6 +575,305 @@ Certifique-se de que TODAS estas variáveis estão configuradas no Vercel:
 **Erro: "Missing required environment variables"**
 - **Causa**: Variáveis não configuradas no Vercel
 - **Solução**: Adicione as variáveis faltantes em Settings → Environment Variables
+
+#### 🎓 **Conceito: Inicialização de Funções Serverless**
+
+**Por que esse erro existe:**
+- Funções serverless são **stateless** - cada requisição pode ser processada em uma instância diferente
+- A função precisa **inicializar completamente** antes de processar a primeira requisição
+- Se a inicialização falhar, a função não pode processar **nenhuma** requisição
+- O erro `FUNCTION_INVOCATION_FAILED` protege você de funções que não conseguem inicializar
+
+**Modelo mental correto:**
+```
+Requisição chega → Vercel cria/usa instância → Inicializa função → Processa requisição → Retorna resposta
+                                    ↑
+                            Se falhar aqui, retorna 500
+```
+
+**O que acontece durante a inicialização:**
+1. **Importação de módulos** (`import` statements são executados)
+2. **Execução de código top-level** (código fora de funções)
+3. **Validação de configuração** (variáveis de ambiente, etc.)
+4. **Inicialização de dependências** (banco de dados, serviços externos)
+
+**Se qualquer etapa falhar:**
+- A função não consegue inicializar
+- O Vercel retorna `500 FUNCTION_INVOCATION_FAILED`
+- Nenhuma requisição pode ser processada
+
+**Como isso se encaixa no design do framework:**
+- **Serverless = Cold Start**: Cada instância precisa inicializar do zero
+- **Erros na inicialização = Falha total**: Não há como processar requisições se a inicialização falhar
+- **Validação antecipada**: Melhor falhar cedo (na inicialização) do que processar requisições com configuração inválida
+
+#### ⚠️ **Sinais de Alerta**
+
+**O que observar para evitar esse problema:**
+
+1. **Validação no top-level do módulo sem try/catch:**
+   ```typescript
+   // ❌ PERIGOSO - se falhar, crasha a função
+   export const env = validateEnv();
+   
+   // ✅ SEGURO - captura erros e fornece mensagem útil
+   let env: EnvConfig;
+   try {
+     env = validateEnv();
+   } catch (error) {
+     console.error('Erro na validação:', error);
+     throw new Error(`Config inválida: ${error.message}`);
+   }
+   export { env };
+   ```
+
+2. **Lançar erros sem contexto:**
+   ```typescript
+   // ❌ ERRADO - mensagem genérica
+   throw new Error('Erro');
+   
+   // ✅ CORRETO - mensagem específica e útil
+   throw new Error(`Missing required environment variables: ${missing.join(', ')}. Configure them in Vercel Settings → Environment Variables`);
+   ```
+
+3. **Não verificar variáveis de ambiente antes de usar:**
+   ```typescript
+   // ❌ PERIGOSO - pode ser undefined
+   const dbUrl = process.env.DATABASE_URL;
+   connect(dbUrl); // ← Crasha se undefined
+   
+   // ✅ SEGURO - valida antes de usar
+   if (!process.env.DATABASE_URL) {
+     throw new Error('DATABASE_URL is required');
+   }
+   const dbUrl = process.env.DATABASE_URL;
+   connect(dbUrl);
+   ```
+
+4. **Código executando no top-level que pode falhar:**
+   ```typescript
+   // ❌ PERIGOSO - executado imediatamente ao importar
+   const connection = connectToDatabase(); // ← Se falhar, crasha
+   
+   // ✅ SEGURO - inicializa apenas quando necessário
+   let connection;
+   function getConnection() {
+     if (!connection) {
+       connection = connectToDatabase();
+     }
+     return connection;
+   }
+   ```
+
+#### 🔄 **Alternativas e Trade-offs**
+
+**Opção 1: Validação rigorosa na inicialização (Recomendado - implementado)**
+- ✅ Falha rápido se houver problema de configuração
+- ✅ Não processa requisições com configuração inválida
+- ✅ Erros claros e fáceis de debugar
+- ❌ Requer que todas as variáveis estejam configuradas antes do deploy
+
+**Opção 2: Validação lazy (sob demanda)**
+- ✅ Permite que a função inicialize mesmo com algumas configurações faltando
+- ✅ Mais flexível
+- ❌ Pode processar requisições e falhar depois (pior experiência)
+- ❌ Mais difícil de debugar
+
+**Opção 3: Validação com fallbacks**
+- ✅ Funciona mesmo se algumas variáveis estiverem faltando
+- ✅ Mais tolerante a erros
+- ❌ Pode mascarar problemas de configuração
+- ❌ Pode funcionar de forma inesperada
+
+**Erro: "Cannot find module '/var/task/backend/dist/index.js'" ou "ERR_MODULE_NOT_FOUND"**
+
+#### 🔍 **Análise do Problema (Root Cause)**
+
+**O que está acontecendo:**
+- O `api/index.js` está tentando importar de `../dist/index.js`
+- Mas o arquivo `dist/index.js` **não existe** no deploy
+- Isso significa que o **build não está gerando o `dist/`** ou está falhando silenciosamente
+
+**Por que o erro ocorreu:**
+- O Vercel executa o Build Command (`npm run build`) durante o deploy
+- Se o build **falhar** ou **não executar**, o `dist/` não é gerado
+- Quando a função tenta importar de `../dist/index.js`, o arquivo não existe
+- Resultado: `ERR_MODULE_NOT_FOUND`
+
+**O que deveria acontecer:**
+1. Vercel executa `npm run build` (que executa `prisma generate && tsc`)
+2. O TypeScript compila `src/` para `dist/`
+3. O `dist/index.js` é gerado
+4. O `api/index.js` importa com sucesso de `../dist/index.js`
+
+**Condições que desencadearam o erro:**
+1. **Build Command incorreto** no Vercel
+2. **Build falhando** (erros de TypeScript, Prisma, etc.)
+3. **Build não sendo executado** (configuração incorreta)
+4. **`dist/` sendo ignorado** ou não incluído no deploy
+
+#### ✅ **Solução Passo a Passo**
+
+**1. Verificar Build Logs no Vercel (CRÍTICO):**
+
+Os Build Logs vão mostrar se o build está sendo executado e se há erros:
+
+1. No Vercel, acesse o **projeto do backend**
+2. Vá em **Deployments**
+3. Clique no **deploy mais recente**
+4. Clique em **"Build Logs"** (não Function Logs, mas Build Logs)
+5. Procure por:
+   - ✅ `npm run build` sendo executado
+   - ✅ `prisma generate` executando com sucesso
+   - ✅ `tsc` compilando os arquivos
+   - ✅ Mensagens de sucesso como "Compiled successfully"
+   - ❌ Erros de TypeScript
+   - ❌ Erros do Prisma
+   - ❌ Mensagens de "Build failed"
+
+**2. Verificar Build Command no Vercel (CRÍTICO):**
+
+O problema mais comum é que o **Build Command não está configurado** ou está vazio!
+
+1. No Vercel, vá em **Settings** → **General** → **Build and Deployment**
+2. Procure por **Build Command**
+3. **Configure como**: `npm run build`
+   - ⚠️ **IMPORTANTE**: Não deixe vazio!
+   - ⚠️ **IMPORTANTE**: Deve ser exatamente `npm run build`
+   - ⚠️ **IMPORTANTE**: O toggle "Override" deve estar **ON** (azul)
+4. Verifique também:
+   - **Root Directory**: `backend` (se o projeto está na pasta backend)
+   - **Output Directory**: (deixe vazio ou "N/A")
+   - **Install Command**: `npm install` (com Override ON)
+5. **⚠️ ATENÇÃO: Verificar Production Overrides:**
+   - Se houver um aviso amarelo: "Configuration Settings in the current Production deployment differ from your current Project Settings"
+   - Clique em **"> Production Overrides"** para expandir
+   - Verifique se o **Build Command** nos overrides está correto
+   - Se estiver diferente ou vazio, **remova os overrides** ou configure corretamente
+   - Clique em **"Save"** para salvar as mudanças
+
+**Se o Build Command estiver vazio:**
+- O Vercel vai pular o build
+- Apenas o `postinstall` será executado
+- O `dist/` não será gerado
+- Resultado: `ERR_MODULE_NOT_FOUND`
+
+**Como verificar se está configurado:**
+- Nos Build Logs, você deve ver: `> npm run build`
+- Se não ver essa linha, o Build Command não está configurado ou está sendo sobrescrito pelos Production Overrides!
+
+**Se os Production Overrides estão vazios:**
+
+1. **Expanda a seção "Project Settings"** (clique na seta para expandir)
+2. Verifique se o **Build Command** está configurado como `npm run build`
+3. Verifique se o toggle **"Override"** está **ON** (azul) ao lado do Build Command
+4. Se o Build Command estiver vazio ou diferente, configure como `npm run build`
+5. Clique em **"Save"** para salvar
+
+**Se o Build Command está correto mas ainda não executa:**
+
+Pode ser que o Vercel esteja detectando automaticamente o framework e ignorando o Build Command. Neste caso:
+
+1. **Force o Build Command:**
+   - Certifique-se de que o toggle "Override" está **ON** (azul)
+   - Isso força o Vercel a usar o Build Command que você configurou
+   - Não confie na detecção automática
+
+2. **Verifique o Framework Preset:**
+   - Se estiver como "Other" ou algo diferente de Express, pode estar causando problemas
+   - Tente mudar para "Other" se estiver em Express (ou vice-versa)
+   - O importante é que o Build Command esteja configurado e com Override ON
+
+3. **Faça um Redeploy:**
+   - Após salvar, vá em **Deployments**
+   - Clique nos **3 pontos** do último deploy
+   - Clique em **"Redeploy"**
+   - Isso força um novo build com as configurações atualizadas
+
+**3. Verificar se o `dist/` está sendo gerado:**
+
+Nos Build Logs, procure por:
+- `Creating dist/` ou similar
+- Arquivos sendo compilados para `dist/`
+- Mensagens do TypeScript sobre arquivos gerados
+
+**4. Se o build está falhando:**
+
+**Erro: "Cannot find module" ou erros de importação no build:**
+- Verifique se todas as dependências estão no `package.json`
+- Verifique se `npm install` está sendo executado antes do build
+
+**Erro: "Prisma schema not found" ou erros do Prisma:**
+- Verifique se o `prisma/schema.prisma` existe
+- Verifique se o `prisma generate` está sendo executado
+
+**Erro: Erros de TypeScript:**
+- Verifique os erros de compilação nos Build Logs
+- Corrija os erros no código TypeScript
+- Verifique se o `tsconfig.json` está correto
+
+**5. Se o build não está sendo executado:**
+
+- Verifique se o **Build Command** está configurado
+- Verifique se não há um `.vercelignore` ignorando arquivos importantes
+- Tente fazer um **Redeploy** manual
+
+**6. Verificar estrutura de arquivos:**
+
+Certifique-se de que a estrutura está assim:
+```
+backend/
+├── api/
+│   └── index.js          ← Existe no repositório
+├── src/
+│   └── index.ts          ← Código fonte
+├── dist/                 ← Gerado durante o build (não precisa estar no git)
+│   └── index.js          ← Deve ser gerado pelo build
+├── vercel.json
+└── package.json
+```
+
+**7. Solução alternativa - Verificar caminho:**
+
+Se o Root Directory está configurado como `backend`, o caminho pode estar incorreto. Tente:
+
+1. Verificar o **Root Directory** no Vercel (Settings → General)
+2. Se está como `backend`, o caminho `../dist/index.js` está correto
+3. Se está vazio, o caminho deveria ser `backend/dist/index.js`
+
+#### 🎓 **Conceito: Build vs Runtime no Vercel**
+
+**Build Time (durante o deploy):**
+- Vercel executa o **Build Command** (`npm run build`)
+- O TypeScript compila `src/` para `dist/`
+- O `dist/` é gerado e incluído no deploy
+- Se o build falhar, o deploy falha ou o `dist/` não é gerado
+
+**Runtime (quando uma requisição chega):**
+- A função serverless é executada
+- O `api/index.js` tenta importar de `../dist/index.js`
+- Se o `dist/` não existe (build falhou), a importação falha
+- Resultado: `ERR_MODULE_NOT_FOUND`
+
+**Por que o `dist/` não está no git:**
+- O `dist/` é gerado durante o build
+- Não precisa estar no repositório (está no `.gitignore`)
+- O Vercel gera o `dist/` durante o deploy usando o Build Command
+
+**O que verificar:**
+1. ✅ Build Command está configurado corretamente
+2. ✅ Build está sendo executado (ver Build Logs)
+3. ✅ Build está gerando o `dist/` (ver Build Logs)
+4. ✅ Não há erros no build (ver Build Logs)
+5. ✅ Caminho no `api/index.js` está correto
+
+#### ⚠️ **Sinais de Alerta**
+
+**O que observar:**
+1. **Build Logs mostrando erros**: Se há erros no build, o `dist/` não será gerado
+2. **Build Command vazio ou incorreto**: O build não será executado
+3. **Mensagens de "Build skipped"**: O build pode não estar sendo executado
+4. **Erros de TypeScript nos logs**: O build pode estar falhando silenciosamente
 
 **Erro: "Cannot find module '/var/task/backend/dist/index.js'" ou "ERR_MODULE_NOT_FOUND"**
 

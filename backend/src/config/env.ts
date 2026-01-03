@@ -91,5 +91,27 @@ export function validateEnv(): EnvConfig {
   return config;
 }
 
-export const env = validateEnv();
+// Validar variáveis de ambiente de forma segura
+// Se houver erro, vamos capturar e fornecer uma mensagem mais útil
+let env: EnvConfig;
+
+try {
+  env = validateEnv();
+} catch (error) {
+  // Se houver erro na validação, logar e re-lançar
+  // Mas garantir que a mensagem seja clara
+  console.error('❌ Erro na validação de variáveis de ambiente:');
+  console.error(error);
+  
+  // Se estiver no Vercel, garantir que o erro seja claro
+  if (process.env.VERCEL) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    throw new Error(`Configuração de ambiente inválida: ${errorMessage}. Verifique as variáveis de ambiente no Vercel (Settings → Environment Variables).`);
+  }
+  
+  // Re-lançar o erro original
+  throw error;
+}
+
+export { env };
 

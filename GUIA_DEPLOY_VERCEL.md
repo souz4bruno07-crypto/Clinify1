@@ -240,3 +240,4 @@ Seu projeto Clinify agora está no ar! 🚀
 **Dica**: O Vercel faz deploy automático sempre que você fizer push na branch `main`. Basta fazer `git push` e o deploy acontece automaticamente!
 
 
+

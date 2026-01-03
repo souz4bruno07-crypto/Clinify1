@@ -189,7 +189,7 @@ const MovementModal: React.FC<MovementModalProps> = ({ product, onClose, onSave,
                 min="0"
                 value={formData.quantity}
                 onChange={e => setFormData(prev => ({ ...prev, quantity: parseFloat(e.target.value) || 0 }))}
-                className="flex-1 px-5 py-4 bg-slate-50 dark:bg-slate-800 border-none rounded-2xl text-2xl font-black text-center focus:ring-2 focus:ring-teal-500"
+                className="flex-1 px-5 py-4 bg-slate-50 dark:bg-slate-800 border-none rounded-2xl text-2xl font-black text-center text-slate-900 dark:text-white focus:ring-2 focus:ring-teal-500"
                 placeholder="0"
               />
               <span className="text-sm font-bold text-slate-400 w-20">
@@ -226,7 +226,7 @@ const MovementModal: React.FC<MovementModalProps> = ({ product, onClose, onSave,
                   min="0"
                   value={formData.unitCost}
                   onChange={e => setFormData(prev => ({ ...prev, unitCost: parseFloat(e.target.value) || 0 }))}
-                  className="w-full px-5 py-4 bg-slate-50 dark:bg-slate-800 border-none rounded-2xl font-bold focus:ring-2 focus:ring-teal-500"
+                  className="w-full px-5 py-4 bg-slate-50 dark:bg-slate-800 border-none rounded-2xl font-bold text-slate-900 dark:text-white focus:ring-2 focus:ring-teal-500"
                 />
               </div>
 
@@ -239,7 +239,7 @@ const MovementModal: React.FC<MovementModalProps> = ({ product, onClose, onSave,
                   type="text"
                   value={formData.invoiceNumber}
                   onChange={e => setFormData(prev => ({ ...prev, invoiceNumber: e.target.value }))}
-                  className="w-full px-5 py-4 bg-slate-50 dark:bg-slate-800 border-none rounded-2xl font-mono focus:ring-2 focus:ring-teal-500"
+                  className="w-full px-5 py-4 bg-slate-50 dark:bg-slate-800 border-none rounded-2xl font-mono text-slate-900 dark:text-white focus:ring-2 focus:ring-teal-500"
                   placeholder="NF-e 12345"
                 />
               </div>
@@ -254,7 +254,7 @@ const MovementModal: React.FC<MovementModalProps> = ({ product, onClose, onSave,
                     type="text"
                     value={formData.batchNumber}
                     onChange={e => setFormData(prev => ({ ...prev, batchNumber: e.target.value }))}
-                    className="w-full px-5 py-4 bg-slate-50 dark:bg-slate-800 border-none rounded-2xl font-mono focus:ring-2 focus:ring-teal-500"
+                    className="w-full px-5 py-4 bg-slate-50 dark:bg-slate-800 border-none rounded-2xl font-mono text-slate-900 dark:text-white focus:ring-2 focus:ring-teal-500"
                     placeholder="LOTE2024-001"
                   />
                 </div>
@@ -266,7 +266,7 @@ const MovementModal: React.FC<MovementModalProps> = ({ product, onClose, onSave,
                     type="date"
                     value={formData.expirationDate}
                     onChange={e => setFormData(prev => ({ ...prev, expirationDate: e.target.value }))}
-                    className="w-full px-5 py-4 bg-slate-50 dark:bg-slate-800 border-none rounded-2xl font-medium focus:ring-2 focus:ring-teal-500"
+                    className="w-full px-5 py-4 bg-slate-50 dark:bg-slate-800 border-none rounded-2xl font-medium text-slate-900 dark:text-white focus:ring-2 focus:ring-teal-500"
                   />
                 </div>
               </div>
@@ -283,7 +283,7 @@ const MovementModal: React.FC<MovementModalProps> = ({ product, onClose, onSave,
                 <select
                   value={formData.staffId}
                   onChange={e => setFormData(prev => ({ ...prev, staffId: e.target.value }))}
-                  className="w-full px-5 py-4 bg-slate-50 dark:bg-slate-800 border-none rounded-2xl font-medium focus:ring-2 focus:ring-teal-500"
+                  className="w-full px-5 py-4 bg-slate-50 dark:bg-slate-800 border-none rounded-2xl font-medium text-slate-900 dark:text-white focus:ring-2 focus:ring-teal-500"
                 >
                   <option value="">Selecione (opcional)</option>
                   {staff.map(s => (
@@ -301,7 +301,7 @@ const MovementModal: React.FC<MovementModalProps> = ({ product, onClose, onSave,
                   type="text"
                   value={formData.patientName}
                   onChange={e => setFormData(prev => ({ ...prev, patientName: e.target.value }))}
-                  className="w-full px-5 py-4 bg-slate-50 dark:bg-slate-800 border-none rounded-2xl font-medium focus:ring-2 focus:ring-teal-500"
+                  className="w-full px-5 py-4 bg-slate-50 dark:bg-slate-800 border-none rounded-2xl font-medium text-slate-900 dark:text-white focus:ring-2 focus:ring-teal-500"
                   placeholder="Nome do paciente (opcional)"
                 />
               </div>
@@ -317,7 +317,7 @@ const MovementModal: React.FC<MovementModalProps> = ({ product, onClose, onSave,
               value={formData.reason}
               onChange={e => setFormData(prev => ({ ...prev, reason: e.target.value }))}
               rows={2}
-              className="w-full px-5 py-4 bg-slate-50 dark:bg-slate-800 border-none rounded-2xl font-medium focus:ring-2 focus:ring-teal-500 resize-none"
+              className="w-full px-5 py-4 bg-slate-50 dark:bg-slate-800 border-none rounded-2xl font-medium text-slate-900 dark:text-white focus:ring-2 focus:ring-teal-500 resize-none"
               placeholder={
                 formData.type === 'entrada' ? 'Ex: Reposição de estoque' :
                 formData.type === 'saida' ? 'Ex: Procedimento de botox' :
