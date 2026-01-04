@@ -390,8 +390,8 @@ const SettingsTab: React.FC<{ user: any; refreshTransactions: () => void }> = ({
                   window.location.reload();
               }, 2000);
           } else {
-              const errorMsg = result?.error || result?.message || 'Erro desconhecido';
-              console.error('[handleSeedData] Erro no resultado:', errorMsg);
+              console.error('[handleSeedData] Erro no resultado:', result);
+              const errorMsg = result && !result.success ? 'Falha ao processar requisição no servidor' : 'Erro desconhecido';
               toast.error(`❌ Erro ao gerar dados: ${errorMsg}. Verifique o console para mais detalhes.`, 8000);
           }
       } catch (error: any) {
