@@ -28,24 +28,41 @@ const BackendChecker: React.FC<{ children: React.ReactNode }> = ({ children }) =
       console.log('📋 VITE_API_URL:', import.meta.env.VITE_API_URL);
       console.log('📋 Base URL:', baseUrl);
       
-      const response = await fetch(healthUrl, { 
-        method: 'GET',
-        headers: {
-          'Accept': 'application/json'
+      // Timeout de 10 segundos para mobile
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 10000);
+      
+      try {
+        const response = await fetch(healthUrl, { 
+          method: 'GET',
+          headers: {
+            'Accept': 'application/json'
+          },
+          signal: controller.signal
+        });
+        
+        clearTimeout(timeoutId);
+        
+        console.log('📡 Resposta do backend:', response.status, response.statusText);
+        
+        if (response.ok) {
+          const data = await response.json();
+          console.log('✅ Backend online:', data);
+          setBackendStatus('online');
+        } else {
+          console.error('❌ Backend retornou erro:', response.status, response.statusText);
+          setBackendStatus('offline');
         }
-      });
-      
-      console.log('📡 Resposta do backend:', response.status, response.statusText);
-      
-      if (response.ok) {
-        const data = await response.json();
-        console.log('✅ Backend online:', data);
-        setBackendStatus('online');
-      } else {
-        console.error('❌ Backend retornou erro:', response.status, response.statusText);
+      } catch (fetchError: any) {
+        clearTimeout(timeoutId);
+        if (fetchError.name === 'AbortError') {
+          console.error('❌ Timeout ao conectar ao backend (10s)');
+        } else {
+          throw fetchError;
+        }
         setBackendStatus('offline');
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('❌ Erro ao conectar ao backend:', error);
       setBackendStatus('offline');
     }
@@ -141,9 +158,25 @@ const AppRoutes: React.FC = () => {
   const prefersReducedMotion = useReducedMotion();
   
   // Durante o carregamento, não redirecionar - aguardar verificação completa
+  // IMPORTANTE: No mobile, isso previne redirecionamento prematuro para LandingPage
   if (loading) {
-     return <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-slate-950"><Loader2 className={`w-8 h-8 text-emerald-600 ${prefersReducedMotion ? '' : 'animate-spin'}`} /></div>;
+     return (
+       <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-slate-950">
+         <div className="flex flex-col items-center gap-4">
+           <Loader2 className={`w-8 h-8 text-emerald-600 ${prefersReducedMotion ? '' : 'animate-spin'}`} />
+           <p className="text-sm text-slate-500 dark:text-slate-400">Carregando...</p>
+         </div>
+       </div>
+     );
   }
+
+  // Log para debug no mobile
+  console.log('[AppRoutes] Renderizando rotas:', {
+    hasUser: !!user,
+    loading,
+    path: window.location.pathname,
+    onboardingCompleted: user?.onboardingCompleted
+  });
 
   return (
     <Routes>

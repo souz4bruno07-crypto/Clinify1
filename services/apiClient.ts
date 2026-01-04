@@ -10,40 +10,113 @@ class ApiClient {
   constructor() {
     // Recuperar token do storage apropriado ao inicializar
     // Primeiro verifica qual storage foi usado originalmente
-    const storageType = localStorage.getItem(STORAGE_TYPE_KEY);
-    
-    if (storageType === 'local') {
-      this.token = localStorage.getItem(TOKEN_KEY);
-    } else if (storageType === 'session') {
-      this.token = sessionStorage.getItem(TOKEN_KEY);
-    } else {
-      // Fallback para verificar ambos (migração de tokens antigos)
-      this.token = localStorage.getItem(TOKEN_KEY) || sessionStorage.getItem(TOKEN_KEY);
+    try {
+      const storageType = localStorage.getItem(STORAGE_TYPE_KEY);
+      
+      if (storageType === 'local') {
+        this.token = localStorage.getItem(TOKEN_KEY);
+      } else if (storageType === 'session') {
+        // No mobile, sessionStorage pode ser limitado, tentar localStorage como fallback
+        this.token = sessionStorage.getItem(TOKEN_KEY) || localStorage.getItem(TOKEN_KEY);
+        if (this.token && !sessionStorage.getItem(TOKEN_KEY)) {
+          // Se encontrou em localStorage mas não em sessionStorage, migrar
+          sessionStorage.setItem(TOKEN_KEY, this.token);
+        }
+      } else {
+        // Fallback para verificar ambos (migração de tokens antigos)
+        // Priorizar localStorage no mobile para persistência
+        this.token = localStorage.getItem(TOKEN_KEY) || sessionStorage.getItem(TOKEN_KEY);
+        if (this.token && localStorage.getItem(TOKEN_KEY)) {
+          // Se encontrou token, salvar o tipo de storage
+          localStorage.setItem(STORAGE_TYPE_KEY, 'local');
+        }
+      }
+      
+      if (this.token) {
+        console.log('[apiClient] Token recuperado do storage:', {
+          storageType: storageType || 'fallback',
+          tokenLength: this.token.length
+        });
+      }
+    } catch (error) {
+      console.error('[apiClient] Erro ao recuperar token:', error);
+      // Em caso de erro (ex: storage bloqueado), tentar recuperar do que for possível
+      try {
+        this.token = localStorage.getItem(TOKEN_KEY) || sessionStorage.getItem(TOKEN_KEY) || null;
+      } catch (e) {
+        this.token = null;
+      }
     }
   }
 
   setToken(token: string | null, rememberMe: boolean = true) {
     this.token = token;
     
-    if (token) {
-      if (rememberMe) {
-        // Persistir por 30 dias usando localStorage
-        localStorage.setItem(TOKEN_KEY, token);
-        localStorage.setItem(STORAGE_TYPE_KEY, 'local');
-        // Limpar sessionStorage caso exista token antigo
-        sessionStorage.removeItem(TOKEN_KEY);
+    try {
+      if (token) {
+        // No mobile, sempre usar localStorage por padrão para melhor persistência
+        // sessionStorage pode ser limpo mais facilmente em alguns navegadores mobile
+        const shouldUseLocalStorage = rememberMe || /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+        
+        if (shouldUseLocalStorage) {
+          // Persistir usando localStorage (mais confiável no mobile)
+          try {
+            localStorage.setItem(TOKEN_KEY, token);
+            localStorage.setItem(STORAGE_TYPE_KEY, 'local');
+            // Limpar sessionStorage caso exista token antigo
+            try {
+              sessionStorage.removeItem(TOKEN_KEY);
+            } catch (e) {
+              // Ignorar erro ao limpar sessionStorage
+            }
+          } catch (e) {
+            // Se localStorage falhar, tentar sessionStorage
+            console.warn('[apiClient] localStorage falhou, usando sessionStorage:', e);
+            try {
+              sessionStorage.setItem(TOKEN_KEY, token);
+              localStorage.setItem(STORAGE_TYPE_KEY, 'session');
+            } catch (e2) {
+              console.error('[apiClient] Erro ao salvar token em ambos storages:', e2);
+            }
+          }
+        } else {
+          // Usar sessionStorage apenas se explicitamente solicitado E não for mobile
+          try {
+            sessionStorage.setItem(TOKEN_KEY, token);
+            localStorage.setItem(STORAGE_TYPE_KEY, 'session');
+            // Limpar localStorage caso exista token antigo
+            try {
+              localStorage.removeItem(TOKEN_KEY);
+            } catch (e) {
+              // Ignorar erro ao limpar localStorage
+            }
+          } catch (e) {
+            // Se sessionStorage falhar, usar localStorage
+            console.warn('[apiClient] sessionStorage falhou, usando localStorage:', e);
+            try {
+              localStorage.setItem(TOKEN_KEY, token);
+              localStorage.setItem(STORAGE_TYPE_KEY, 'local');
+            } catch (e2) {
+              console.error('[apiClient] Erro ao salvar token:', e2);
+            }
+          }
+        }
       } else {
-        // Usar sessionStorage - expira ao fechar navegador
-        sessionStorage.setItem(TOKEN_KEY, token);
-        localStorage.setItem(STORAGE_TYPE_KEY, 'session');
-        // Limpar localStorage caso exista token antigo
-        localStorage.removeItem(TOKEN_KEY);
+        // Limpar ambos os storages
+        try {
+          localStorage.removeItem(TOKEN_KEY);
+          localStorage.removeItem(STORAGE_TYPE_KEY);
+        } catch (e) {
+          // Ignorar erro
+        }
+        try {
+          sessionStorage.removeItem(TOKEN_KEY);
+        } catch (e) {
+          // Ignorar erro
+        }
       }
-    } else {
-      // Limpar ambos os storages
-      localStorage.removeItem(TOKEN_KEY);
-      localStorage.removeItem(STORAGE_TYPE_KEY);
-      sessionStorage.removeItem(TOKEN_KEY);
+    } catch (error) {
+      console.error('[apiClient] Erro ao salvar token:', error);
     }
   }
 

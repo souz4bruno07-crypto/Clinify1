@@ -20,10 +20,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       const userData = await api.get<User>('/auth/me');
       if (isMounted.current && userData) {
+        console.log('[AuthContext] Perfil do usuário carregado:', userData);
         setUser(userData);
       }
-    } catch (e) {
-      cleanLocalSession();
+    } catch (e: any) {
+      console.error('[AuthContext] Erro ao buscar perfil:', e);
+      // Só limpar sessão se o erro for 401 (não autorizado)
+      // Outros erros (rede, timeout, etc) não devem limpar a sessão no mobile
+      if (e?.status === 401 || e?.status === 403) {
+        console.log('[AuthContext] Token inválido, limpando sessão');
+        cleanLocalSession();
+      } else {
+        console.warn('[AuthContext] Erro ao buscar perfil, mas mantendo token:', e?.status || 'unknown');
+        // Manter o token mesmo com erro, pode ser problema temporário de rede
+      }
     }
   }, [cleanLocalSession]);
 
@@ -31,20 +41,37 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     isMounted.current = true;
 
     const initializeAuth = async () => {
-      // O token já é recuperado automaticamente no apiClient constructor
-      // baseado no tipo de storage usado originalmente
-      const token = api.getToken();
-      
-      if (token) {
-        try {
-          await fetchUserProfile();
-        } catch (e) {
-          cleanLocalSession();
+      try {
+        // O token já é recuperado automaticamente no apiClient constructor
+        // baseado no tipo de storage usado originalmente
+        const token = api.getToken();
+        const storageType = api.getStorageType();
+        
+        console.log('[AuthContext] Inicializando autenticação...', {
+          hasToken: !!token,
+          storageType: storageType || 'unknown',
+          tokenLength: token?.length || 0
+        });
+        
+        if (token) {
+          try {
+            await fetchUserProfile();
+          } catch (e: any) {
+            // Não limpar sessão aqui, o fetchUserProfile já trata isso
+            console.error('[AuthContext] Erro ao inicializar perfil:', e);
+            // Se for erro 401, já foi tratado no fetchUserProfile
+            // Para outros erros, manter loading como false para permitir tentativa de uso
+          }
+        } else {
+          console.log('[AuthContext] Nenhum token encontrado');
         }
-      }
-      
-      if (isMounted.current) {
-        setLoading(false);
+      } catch (error) {
+        console.error('[AuthContext] Erro na inicialização:', error);
+      } finally {
+        if (isMounted.current) {
+          console.log('[AuthContext] Finalizando inicialização, loading = false');
+          setLoading(false);
+        }
       }
     };
 

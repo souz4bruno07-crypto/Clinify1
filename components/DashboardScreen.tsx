@@ -49,7 +49,10 @@ const LoadingFallback: React.FC<{ message?: string }> = ({ message = 'Carregando
 const DashboardScreen: React.FC = () => {
   const { user, signOut } = useAuth();
   const [currentDate, setCurrentDate] = useState(new Date());
-  const { transactions, categories, isLoading, refreshData } = useFinancialData(user?.clinicId);
+  // Usar user?.id ao invés de clinicId, pois as transações são vinculadas ao userId
+  // Se clinicId não existir, usar id como fallback
+  const userIdForData = user?.clinicId || user?.id;
+  const { transactions, categories, isLoading, refreshData } = useFinancialData(userIdForData);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isTransactionModalOpen, setIsTransactionModalOpen] = useState(false);
   const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
