@@ -120,20 +120,22 @@ export const deleteAllClinicData = async (_userId: string): Promise<DeleteAllCli
 export interface SeedResult {
   success: boolean;
   created?: {
-    staff: number;
-    patients: number;
-    appointments: number;
-    transactions: number;
-    quotes: number;
-    products: number;
-    movements: number;
-    procedureLinks: number;
-    alerts: number;
-    chatThreads: number;
-    chatMessages: number;
-    categories: number;
-    prescriptions: number;
+    staff?: number;
+    patients?: number;
+    appointments?: number;
+    transactions?: number;
+    quotes?: number;
+    products?: number;
+    movements?: number;
+    procedureLinks?: number;
+    alerts?: number;
+    chatThreads?: number;
+    chatMessages?: number;
+    categories?: number;
+    prescriptions?: number;
   };
+  error?: string;
+  message?: string;
 }
 
 export const seedMockData = async (_userId: string): Promise<SeedResult> => {

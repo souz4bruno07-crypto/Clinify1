@@ -359,45 +359,57 @@ const SettingsTab: React.FC<{ user: any; refreshTransactions: () => void }> = ({
       
       setIsDataWorking(true);
       const seedStartTime = Date.now();
-      // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/7018d877-4b16-4a68-9ee6-6d7d4c606105',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'SettingsTab.tsx:334',message:'handleSeedData iniciado',data:{userId:user.id},timestamp:Date.now(),sessionId:'debug-session',runId:'post-fix',hypothesisId:'B'})}).catch(()=>{});
-      // #endregion
+      
       try {
+          console.log('[handleSeedData] Iniciando geração de dados fictícios...');
           const result = await seedMockData(user.id);
           const seedElapsed = Date.now() - seedStartTime;
           
           console.log('[handleSeedData] Resultado:', result);
           console.log('[handleSeedData] Tempo decorrido:', seedElapsed, 'ms');
           
-          if (result && result.success && result.created) {
+          if (result && result.success) {
+              const created = result.created || {};
               const summary = [
-                  `${result.created.patients || 0} Pacientes`,
-                  `${result.created.staff || 0} Colaboradores`,
-                  `${result.created.appointments || 0} Agendamentos`,
-                  `${result.created.transactions || 0} Transações`,
-                  `${result.created.quotes || 0} Orçamentos`,
-                  `${result.created.products || 0} Produtos`,
-                  `${result.created.movements || 0} Movimentações`,
-                  `${result.created.prescriptions || 0} Prescrições`,
-                  `${result.created.chatThreads || 0} Conversas`,
-                  `${result.created.chatMessages || 0} Mensagens`
-              ].join(' • ');
+                  created.patients !== undefined ? `${created.patients} Pacientes` : null,
+                  created.staff !== undefined ? `${created.staff} Colaboradores` : null,
+                  created.appointments !== undefined ? `${created.appointments} Agendamentos` : null,
+                  created.transactions !== undefined ? `${created.transactions} Transações` : null,
+                  created.quotes !== undefined ? `${created.quotes} Orçamentos` : null,
+                  created.products !== undefined ? `${created.products} Produtos` : null,
+                  created.movements !== undefined ? `${created.movements} Movimentações` : null,
+                  created.prescriptions !== undefined ? `${created.prescriptions} Prescrições` : null,
+                  created.chatThreads !== undefined ? `${created.chatThreads} Conversas` : null,
+                  created.chatMessages !== undefined ? `${created.chatMessages} Mensagens` : null
+              ].filter(Boolean).join(' • ') || 'Dados criados';
               
               toast.success(`✅ Dados fictícios criados com sucesso!\n\n${summary}`, 5000);
+              
+              // Recarregar dados sem reload completo no mobile para melhor UX
               refreshTransactions();
-              // Recarregar página após 2 segundos para atualizar todas as abas
+              
+              // Aguardar um pouco antes de recarregar para garantir que os dados foram salvos
               setTimeout(() => {
-                  window.location.reload();
+                  // No mobile, tentar recarregar apenas os dados primeiro
+                  if (window.innerWidth <= 768) {
+                      // Recarregar suavemente no mobile
+                      refreshTransactions();
+                      setTimeout(() => {
+                          window.location.reload();
+                      }, 1000);
+                  } else {
+                      window.location.reload();
+                  }
               }, 2000);
           } else {
-              console.error('[handleSeedData] Erro no resultado:', result);
-              const errorMsg = result && !result.success ? 'Falha ao processar requisição no servidor' : 'Erro desconhecido';
-              toast.error(`❌ Erro ao gerar dados: ${errorMsg}. Verifique o console para mais detalhes.`, 8000);
+              const errorMsg = result?.error || result?.message || 'Erro desconhecido';
+              console.error('[handleSeedData] Erro na geração:', errorMsg);
+              toast.error(`❌ Erro ao gerar dados: ${errorMsg}`, 5000);
           }
       } catch (error: any) {
-          console.error('[handleSeedData] Erro capturado:', error);
-          const errorMessage = error?.message || error?.toString() || 'Erro desconhecido ao gerar dados';
-          toast.error(`❌ Erro ao gerar dados de teste: ${errorMessage}`, 8000);
+          console.error('[handleSeedData] Exceção capturada:', error);
+          const errorMessage = error?.message || error?.toString() || 'Erro ao conectar com o servidor';
+          toast.error(`❌ Erro ao gerar dados: ${errorMessage}\n\nVerifique sua conexão e tente novamente.`, 6000);
       } finally {
           setIsDataWorking(false);
       }

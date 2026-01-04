@@ -7,8 +7,15 @@ import { useToast } from '../../contexts/ToastContext';
 import { useFocusTrap } from '../../hooks/useFocusTrap';
 import { 
   X, Calendar, Sparkles, Check, Loader2, Wallet, 
-  CreditCard, Banknote, Smartphone, Tag, Info, AlertCircle, CheckCircle2 
+  CreditCard, Banknote, Smartphone, Tag, Info, AlertCircle, CheckCircle2, Settings
 } from 'lucide-react';
+import { 
+  getTerminalsWithCustomFees, 
+  calculateTerminalFee, 
+  getTerminalFeePercentage,
+  PaymentTerminal,
+  updateTerminalFee 
+} from '../../utils/paymentTerminals';
 
 interface TransactionModalProps {
   isOpen: boolean;
@@ -30,6 +37,16 @@ const TransactionModal: React.FC<TransactionModalProps> = ({
   const [showSuccess, setShowSuccess] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const previousActiveElementRef = useRef<HTMLElement | null>(null);
+  const [terminals, setTerminals] = useState<PaymentTerminal[]>(() => getTerminalsWithCustomFees());
+  const [selectedTerminalId, setSelectedTerminalId] = useState<string>('cielo');
+  const [isEditingTerminalFee, setIsEditingTerminalFee] = useState(false);
+  
+  // Recarregar terminais quando editar taxas
+  useEffect(() => {
+    if (!isEditingTerminalFee) {
+      setTerminals(getTerminalsWithCustomFees());
+    }
+  }, [isEditingTerminalFee]);
   const [formData, setFormData] = useState({
     desc: '',
     amount: '',
@@ -41,7 +58,8 @@ const TransactionModal: React.FC<TransactionModalProps> = ({
     patientName: '',
     tags: '',
     installments: 1,
-    cardFee: 0
+    cardFee: 0,
+    terminalId: ''
   });
 
   const paymentMethods = [
@@ -56,21 +74,29 @@ const TransactionModal: React.FC<TransactionModalProps> = ({
       previousActiveElementRef.current = document.activeElement as HTMLElement;
       setShowSuccess(false);
       setErrorMsg(null);
+      setIsEditingTerminalFee(false);
+      
       if (editingTransaction) {
+        const terminalId = (editingTransaction as any).terminalId || 'cielo';
+        setSelectedTerminalId(terminalId);
+        const paymentMethod = (editingTransaction as any).paymentMethod || 'pix';
         setFormData({
           desc: editingTransaction.description || '',
           amount: formatCurrencyValue(editingTransaction.amount),
           type: editingTransaction.type,
           category: editingTransaction.category || '',
           date: new Date(editingTransaction.date).toISOString().split('T')[0],
-          paymentMethod: (editingTransaction as any).paymentMethod || 'pix',
+          paymentMethod: paymentMethod,
           isPaid: (editingTransaction as any).isPaid ?? true,
           patientName: editingTransaction.patientName || '',
           tags: (editingTransaction as any).tags || '',
           installments: (editingTransaction as any).installments || 1,
-          cardFee: (editingTransaction as any).cardFee || 0
+          cardFee: (editingTransaction as any).cardFee || 0,
+          terminalId: terminalId
         });
       } else {
+        const defaultTerminalId = 'cielo';
+        setSelectedTerminalId(defaultTerminalId);
         setFormData({
           desc: '',
           amount: '',
@@ -82,11 +108,12 @@ const TransactionModal: React.FC<TransactionModalProps> = ({
           patientName: '',
           tags: '',
           installments: 1,
-          cardFee: 0
+          cardFee: 0,
+          terminalId: defaultTerminalId
         });
       }
     }
-  }, [isOpen, editingTransaction, initialDate]);
+  }, [isOpen, editingTransaction, initialDate, terminals]);
 
   // Handle ESC key
   useEffect(() => {
@@ -123,10 +150,21 @@ const TransactionModal: React.FC<TransactionModalProps> = ({
       return;
     }
 
-    // Calcular valor com taxa de cartão se aplicável
+    // Calcular valor com taxa de maquininha se aplicável
     let finalAmount = amountVal;
-    if (formData.paymentMethod === 'credit' && formData.cardFee > 0) {
-      finalAmount = amountVal * (1 + formData.cardFee / 100);
+    let feeAmount = 0;
+    
+    if ((formData.paymentMethod === 'credit' || formData.paymentMethod === 'debit') && selectedTerminalId) {
+      const terminal = terminals.find(t => t.id === selectedTerminalId);
+      if (terminal) {
+        const paymentType = formData.paymentMethod === 'credit' ? 'credit' : 'debit';
+        feeAmount = calculateTerminalFee(terminal, amountVal, paymentType, formData.installments);
+        finalAmount = amountVal + feeAmount;
+        
+        // Atualizar cardFee com a porcentagem calculada para compatibilidade
+        const feePercentage = getTerminalFeePercentage(terminal, paymentType, formData.installments);
+        formData.cardFee = feePercentage;
+      }
     }
 
     const data = {
@@ -141,7 +179,8 @@ const TransactionModal: React.FC<TransactionModalProps> = ({
       isPaid: formData.isPaid,
       tags: formData.tags,
       installments: formData.paymentMethod === 'credit' ? formData.installments : undefined,
-      cardFee: formData.paymentMethod === 'credit' ? formData.cardFee : undefined
+      cardFee: (formData.paymentMethod === 'credit' || formData.paymentMethod === 'debit') ? formData.cardFee : undefined,
+      terminalId: (formData.paymentMethod === 'credit' || formData.paymentMethod === 'debit') ? selectedTerminalId : undefined
     };
 
     try {
@@ -308,9 +347,21 @@ const TransactionModal: React.FC<TransactionModalProps> = ({
                                       onClick={() => {
                                         const newData = {...formData, paymentMethod: m.id};
                                         // Reset parcelas e taxa se não for cartão
-                                        if (m.id !== 'credit') {
+                                        if (m.id !== 'credit' && m.id !== 'debit') {
                                           newData.installments = 1;
                                           newData.cardFee = 0;
+                                          newData.terminalId = '';
+                                        } else if (m.id === 'credit' || m.id === 'debit') {
+                                          // Definir terminal padrão e calcular taxa inicial
+                                          const terminal = terminals.find(t => t.id === selectedTerminalId) || terminals[0];
+                                          const fees = terminal.customFees || terminal.fees;
+                                          if (m.id === 'credit') {
+                                            newData.cardFee = fees.creditAtSight;
+                                            newData.terminalId = selectedTerminalId || 'cielo';
+                                          } else {
+                                            newData.cardFee = fees.debit;
+                                            newData.terminalId = selectedTerminalId || 'cielo';
+                                          }
                                         }
                                         setFormData(newData);
                                       }} 
@@ -324,83 +375,212 @@ const TransactionModal: React.FC<TransactionModalProps> = ({
                             </div>
                         </div>
 
-                        {/* Campos de cartão de crédito */}
-                        {formData.paymentMethod === 'credit' && (
-                          <div className="space-y-4 p-4 bg-indigo-50 dark:bg-indigo-900/10 rounded-2xl border border-indigo-200 dark:border-indigo-800">
-                            <div>
-                              <label htmlFor="installments" className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1 block mb-2">
-                                Parcelas
-                              </label>
-                              <select
-                                id="installments"
-                                value={formData.installments}
-                                onChange={e => setFormData({...formData, installments: parseInt(e.target.value) || 1})}
-                                className="w-full bg-white dark:bg-slate-800 border-none rounded-xl py-3 px-4 font-bold text-sm text-slate-900 dark:text-white focus:ring-2 focus:ring-indigo-500"
-                              >
-                                {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map(num => (
-                                  <option key={num} value={num}>
-                                    {num}x {num === 1 ? 'sem juros' : ''}
-                                  </option>
-                                ))}
-                              </select>
-                            </div>
+                        {/* Campos de maquininha para cartão */}
+                        {(formData.paymentMethod === 'credit' || formData.paymentMethod === 'debit') && (() => {
+                          const selectedTerminal = terminals.find(t => t.id === selectedTerminalId) || terminals[0];
+                          const fees = selectedTerminal.customFees || selectedTerminal.fees;
+                          const paymentType = formData.paymentMethod === 'credit' ? 'credit' : 'debit';
+                          const amount = parseCurrencyInput(formData.amount) || 0;
+                          const feePercentage = getTerminalFeePercentage(selectedTerminal, paymentType, formData.installments);
+                          const feeAmount = calculateTerminalFee(selectedTerminal, amount, paymentType, formData.installments);
+                          const totalAmount = amount + feeAmount;
+                          const maxInstallments = fees.maxInstallments || 12;
+                          const installmentsOptions = Array.from({ length: maxInstallments }, (_, i) => i + 1);
 
-                            <div>
-                              <label htmlFor="cardFee" className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1 block mb-2">
-                                Taxa do Cartão (%)
-                              </label>
-                              <div className="relative">
-                                <input
-                                  id="cardFee"
-                                  type="number"
-                                  step="0.01"
-                                  min="0"
-                                  max="100"
-                                  value={formData.cardFee}
-                                  onChange={e => setFormData({...formData, cardFee: parseFloat(e.target.value) || 0})}
+                          return (
+                            <div className="space-y-4 p-4 bg-indigo-50 dark:bg-indigo-900/10 rounded-2xl border border-indigo-200 dark:border-indigo-800">
+                              <div>
+                                <div className="flex items-center justify-between mb-2">
+                                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1 block">
+                                    Maquininha
+                                  </label>
+                                  <button
+                                    type="button"
+                                    onClick={() => setIsEditingTerminalFee(!isEditingTerminalFee)}
+                                    className="text-xs text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-300 flex items-center gap-1"
+                                  >
+                                    <Settings className="w-3 h-3" />
+                                    {isEditingTerminalFee ? 'Salvar' : 'Editar Taxas'}
+                                  </button>
+                                </div>
+                                <select
+                                  value={selectedTerminalId}
+                                  onChange={e => {
+                                    const newTerminalId = e.target.value;
+                                    setSelectedTerminalId(newTerminalId);
+                                    const terminal = terminals.find(t => t.id === newTerminalId);
+                                    if (terminal) {
+                                      const newFees = terminal.customFees || terminal.fees;
+                                      const newFeePct = formData.paymentMethod === 'credit' 
+                                        ? (formData.installments === 1 ? newFees.creditAtSight : newFees.creditParceled + (newFees.parcelFee * (formData.installments - 1)))
+                                        : newFees.debit;
+                                      setFormData({...formData, terminalId: newTerminalId, cardFee: newFeePct});
+                                    }
+                                  }}
                                   className="w-full bg-white dark:bg-slate-800 border-none rounded-xl py-3 px-4 font-bold text-sm text-slate-900 dark:text-white focus:ring-2 focus:ring-indigo-500"
-                                  placeholder="0,00"
-                                />
-                                <span className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 font-bold text-sm">%</span>
+                                >
+                                  {terminals.filter(t => t.isActive).map(terminal => (
+                                    <option key={terminal.id} value={terminal.id}>
+                                      {terminal.name}
+                                    </option>
+                                  ))}
+                                </select>
                               </div>
-                              {formData.amount && parseCurrencyInput(formData.amount) > 0 && (
-                                <div className="mt-2 p-4 bg-white dark:bg-slate-800 rounded-xl border border-indigo-200 dark:border-indigo-800">
+
+                              {formData.paymentMethod === 'credit' && (
+                                <div>
+                                  <label htmlFor="installments" className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1 block mb-2">
+                                    Parcelas (máx. {maxInstallments}x)
+                                  </label>
+                                  <select
+                                    id="installments"
+                                    value={formData.installments}
+                                    onChange={e => {
+                                      const newInstallments = parseInt(e.target.value) || 1;
+                                      const terminal = terminals.find(t => t.id === selectedTerminalId);
+                                      if (terminal) {
+                                        const fees = terminal.customFees || terminal.fees;
+                                        const newFeePct = newInstallments === 1 
+                                          ? fees.creditAtSight 
+                                          : fees.creditParceled + (fees.parcelFee * (newInstallments - 1));
+                                        setFormData({...formData, installments: newInstallments, cardFee: newFeePct});
+                                      }
+                                    }}
+                                    className="w-full bg-white dark:bg-slate-800 border-none rounded-xl py-3 px-4 font-bold text-sm text-slate-900 dark:text-white focus:ring-2 focus:ring-indigo-500"
+                                  >
+                                    {installmentsOptions.map(num => (
+                                      <option key={num} value={num}>
+                                        {num}x {num === 1 ? 'à vista' : ''}
+                                      </option>
+                                    ))}
+                                  </select>
+                                </div>
+                              )}
+
+                              {isEditingTerminalFee && (
+                                <div className="space-y-3 p-3 bg-white dark:bg-slate-800 rounded-xl border border-indigo-200 dark:border-indigo-800">
+                                  <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2">
+                                    Taxas Personalizadas - {selectedTerminal.name}
+                                  </p>
+                                  {formData.paymentMethod === 'debit' ? (
+                                    <div>
+                                      <label className="text-[10px] font-bold text-slate-400 uppercase mb-1 block">
+                                        Débito (%)
+                                      </label>
+                                      <input
+                                        type="number"
+                                        step="0.01"
+                                        min="0"
+                                        value={fees.debit}
+                                        onChange={e => {
+                                          const value = parseFloat(e.target.value) || 0;
+                                          updateTerminalFee(selectedTerminalId, 'debit', value);
+                                          setFormData({...formData, cardFee: value});
+                                          // Recarregar terminais
+                                          const updated = getTerminalsWithCustomFees();
+                                          setSelectedTerminalId(selectedTerminalId);
+                                        }}
+                                        className="w-full bg-slate-50 dark:bg-slate-900 border-none rounded-lg py-2 px-3 font-bold text-xs"
+                                      />
+                                    </div>
+                                  ) : (
+                                    <>
+                                      <div>
+                                        <label className="text-[10px] font-bold text-slate-400 uppercase mb-1 block">
+                                          Crédito à Vista (%)
+                                        </label>
+                                        <input
+                                          type="number"
+                                          step="0.01"
+                                          min="0"
+                                          value={fees.creditAtSight}
+                                          onChange={e => {
+                                            const value = parseFloat(e.target.value) || 0;
+                                            updateTerminalFee(selectedTerminalId, 'creditAtSight', value);
+                                            if (formData.installments === 1) {
+                                              setFormData({...formData, cardFee: value});
+                                            }
+                                          }}
+                                          className="w-full bg-slate-50 dark:bg-slate-900 border-none rounded-lg py-2 px-3 font-bold text-xs"
+                                        />
+                                      </div>
+                                      <div>
+                                        <label className="text-[10px] font-bold text-slate-400 uppercase mb-1 block">
+                                          Crédito Parcelado Base (%)
+                                        </label>
+                                        <input
+                                          type="number"
+                                          step="0.01"
+                                          min="0"
+                                          value={fees.creditParceled}
+                                          onChange={e => {
+                                            const value = parseFloat(e.target.value) || 0;
+                                            updateTerminalFee(selectedTerminalId, 'creditParceled', value);
+                                            if (formData.installments > 1) {
+                                              const newFeePct = value + (fees.parcelFee * (formData.installments - 1));
+                                              setFormData({...formData, cardFee: newFeePct});
+                                            }
+                                          }}
+                                          className="w-full bg-slate-50 dark:bg-slate-900 border-none rounded-lg py-2 px-3 font-bold text-xs"
+                                        />
+                                      </div>
+                                      <div>
+                                        <label className="text-[10px] font-bold text-slate-400 uppercase mb-1 block">
+                                          Taxa por Parcela (%)
+                                        </label>
+                                        <input
+                                          type="number"
+                                          step="0.01"
+                                          min="0"
+                                          value={fees.parcelFee}
+                                          onChange={e => {
+                                            const value = parseFloat(e.target.value) || 0;
+                                            updateTerminalFee(selectedTerminalId, 'parcelFee', value);
+                                            if (formData.installments > 1) {
+                                              const newFeePct = fees.creditParceled + (value * (formData.installments - 1));
+                                              setFormData({...formData, cardFee: newFeePct});
+                                            }
+                                          }}
+                                          className="w-full bg-slate-50 dark:bg-slate-900 border-none rounded-lg py-2 px-3 font-bold text-xs"
+                                        />
+                                      </div>
+                                    </>
+                                  )}
+                                </div>
+                              )}
+
+                              {amount > 0 && (
+                                <div className="p-4 bg-white dark:bg-slate-800 rounded-xl border border-indigo-200 dark:border-indigo-800">
                                   <div className="space-y-2">
                                     <div className="flex justify-between items-center text-xs">
                                       <span className="text-slate-500 font-bold">Valor original:</span>
-                                      <span className="text-slate-900 dark:text-white font-black">{formatCurrency(parseCurrencyInput(formData.amount))}</span>
+                                      <span className="text-slate-900 dark:text-white font-black">{formatCurrency(amount)}</span>
                                     </div>
-                                    {formData.cardFee > 0 && (
+                                    {feeAmount > 0 && (
                                       <>
                                         <div className="flex justify-between items-center text-xs">
-                                          <span className="text-slate-500 font-bold">Taxa ({formData.cardFee}%):</span>
+                                          <span className="text-slate-500 font-bold">
+                                            Taxa da maquininha ({feePercentage.toFixed(2)}%):
+                                          </span>
                                           <span className="text-rose-500 font-black">
-                                            +{formatCurrency(parseCurrencyInput(formData.amount) * (formData.cardFee / 100))}
+                                            +{formatCurrency(feeAmount)}
                                           </span>
                                         </div>
                                         <div className="flex justify-between items-center text-sm mt-2 pt-2 border-t border-slate-200 dark:border-slate-700">
                                           <span className="text-slate-700 dark:text-slate-300 font-black">Valor total:</span>
                                           <span className="text-indigo-600 dark:text-indigo-400 font-black text-base">
-                                            {formatCurrency(parseCurrencyInput(formData.amount) * (1 + formData.cardFee / 100))}
+                                            {formatCurrency(totalAmount)}
                                           </span>
                                         </div>
                                       </>
                                     )}
-                                    {formData.installments > 1 && (
+                                    {formData.paymentMethod === 'credit' && formData.installments > 1 && (
                                       <div className="flex justify-between items-center text-xs mt-2 pt-2 border-t border-slate-200 dark:border-slate-700">
                                         <span className="text-slate-500 font-bold">
                                           Valor por parcela ({formData.installments}x):
                                         </span>
                                         <span className="text-emerald-600 dark:text-emerald-400 font-black text-sm">
-                                          {formatCurrency((parseCurrencyInput(formData.amount) * (1 + (formData.cardFee / 100))) / formData.installments)}
-                                        </span>
-                                      </div>
-                                    )}
-                                    {formData.cardFee === 0 && formData.installments > 1 && (
-                                      <div className="flex justify-between items-center text-xs mt-1">
-                                        <span className="text-slate-500 font-bold">Total parcelado:</span>
-                                        <span className="text-slate-900 dark:text-white font-black">
-                                          {formatCurrency(parseCurrencyInput(formData.amount))}
+                                          {formatCurrency(totalAmount / formData.installments)}
                                         </span>
                                       </div>
                                     )}
@@ -408,8 +588,8 @@ const TransactionModal: React.FC<TransactionModalProps> = ({
                                 </div>
                               )}
                             </div>
-                          </div>
-                        )}
+                          );
+                        })()}
 
                         <div>
                             <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Status</label>
