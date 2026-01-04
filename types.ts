@@ -35,6 +35,8 @@ export interface Transaction {
   tags?: string;
   installments?: number;
   cardFee?: number;
+  posMachineId?: string; // ID da maquininha usada
+  posMachineName?: string; // Nome da maquininha (para histórico)
 }
 
 export interface Category {
@@ -763,6 +765,33 @@ export interface ProfessionalSignature {
   registrationState: string;          // UF do registro
   specialties: string[];
   isActive: boolean;
+  createdAt: number;
+  updatedAt: number;
+}
+
+// ============================================
+// SISTEMA DE MAQUININHAS DE CARTÃO (POS)
+// ============================================
+
+export interface PosMachineFee {
+  debit: number;           // Taxa para débito (%)
+  credit: number;          // Taxa para crédito à vista (%)
+  installments: {          // Taxas por número de parcelas
+    [installments: number]: number; // Ex: { 2: 4.5, 3: 5.0, 6: 8.0, 12: 12.0 }
+  };
+  maxInstallments: number; // Máximo de parcelas permitidas
+  minInstallmentValue?: number; // Valor mínimo por parcela
+}
+
+export interface PosMachine {
+  id: string;
+  userId: string;
+  name: string;                      // Ex: "Maquininha Principal", "Cielo 1"
+  provider: 'cielo' | 'stone' | 'pagarme' | 'getnet' | 'mercado_pago' | 'rede' | 'custom';
+  fees: PosMachineFee;
+  isDefault: boolean;                // Maquininha padrão
+  isActive: boolean;
+  notes?: string;
   createdAt: number;
   updatedAt: number;
 }

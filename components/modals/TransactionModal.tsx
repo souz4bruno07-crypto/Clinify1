@@ -363,32 +363,48 @@ const TransactionModal: React.FC<TransactionModalProps> = ({
                                 />
                                 <span className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 font-bold text-sm">%</span>
                               </div>
-                              {formData.cardFee > 0 && formData.amount && (
-                                <div className="mt-2 p-3 bg-white dark:bg-slate-800 rounded-xl">
-                                  <div className="flex justify-between items-center text-xs">
-                                    <span className="text-slate-500 font-bold">Valor original:</span>
-                                    <span className="text-slate-900 dark:text-white font-black">{formatCurrency(parseCurrencyInput(formData.amount))}</span>
-                                  </div>
-                                  <div className="flex justify-between items-center text-xs mt-1">
-                                    <span className="text-slate-500 font-bold">Taxa ({formData.cardFee}%):</span>
-                                    <span className="text-rose-500 font-black">
-                                      +{formatCurrency(parseCurrencyInput(formData.amount) * (formData.cardFee / 100))}
-                                    </span>
-                                  </div>
-                                  <div className="flex justify-between items-center text-sm mt-2 pt-2 border-t border-slate-200 dark:border-slate-700">
-                                    <span className="text-slate-700 dark:text-slate-300 font-black">Valor final:</span>
-                                    <span className="text-indigo-600 dark:text-indigo-400 font-black text-lg">
-                                      {formatCurrency(parseCurrencyInput(formData.amount) * (1 + formData.cardFee / 100))}
-                                    </span>
-                                  </div>
-                                  {formData.installments > 1 && (
-                                    <div className="flex justify-between items-center text-xs mt-2 pt-2 border-t border-slate-200 dark:border-slate-700">
-                                      <span className="text-slate-500 font-bold">Valor por parcela:</span>
-                                      <span className="text-slate-900 dark:text-white font-black">
-                                        {formatCurrency((parseCurrencyInput(formData.amount) * (1 + formData.cardFee / 100)) / formData.installments)}
-                                      </span>
+                              {formData.amount && parseCurrencyInput(formData.amount) > 0 && (
+                                <div className="mt-2 p-4 bg-white dark:bg-slate-800 rounded-xl border border-indigo-200 dark:border-indigo-800">
+                                  <div className="space-y-2">
+                                    <div className="flex justify-between items-center text-xs">
+                                      <span className="text-slate-500 font-bold">Valor original:</span>
+                                      <span className="text-slate-900 dark:text-white font-black">{formatCurrency(parseCurrencyInput(formData.amount))}</span>
                                     </div>
-                                  )}
+                                    {formData.cardFee > 0 && (
+                                      <>
+                                        <div className="flex justify-between items-center text-xs">
+                                          <span className="text-slate-500 font-bold">Taxa ({formData.cardFee}%):</span>
+                                          <span className="text-rose-500 font-black">
+                                            +{formatCurrency(parseCurrencyInput(formData.amount) * (formData.cardFee / 100))}
+                                          </span>
+                                        </div>
+                                        <div className="flex justify-between items-center text-sm mt-2 pt-2 border-t border-slate-200 dark:border-slate-700">
+                                          <span className="text-slate-700 dark:text-slate-300 font-black">Valor total:</span>
+                                          <span className="text-indigo-600 dark:text-indigo-400 font-black text-base">
+                                            {formatCurrency(parseCurrencyInput(formData.amount) * (1 + formData.cardFee / 100))}
+                                          </span>
+                                        </div>
+                                      </>
+                                    )}
+                                    {formData.installments > 1 && (
+                                      <div className="flex justify-between items-center text-xs mt-2 pt-2 border-t border-slate-200 dark:border-slate-700">
+                                        <span className="text-slate-500 font-bold">
+                                          Valor por parcela ({formData.installments}x):
+                                        </span>
+                                        <span className="text-emerald-600 dark:text-emerald-400 font-black text-sm">
+                                          {formatCurrency((parseCurrencyInput(formData.amount) * (1 + (formData.cardFee / 100))) / formData.installments)}
+                                        </span>
+                                      </div>
+                                    )}
+                                    {formData.cardFee === 0 && formData.installments > 1 && (
+                                      <div className="flex justify-between items-center text-xs mt-1">
+                                        <span className="text-slate-500 font-bold">Total parcelado:</span>
+                                        <span className="text-slate-900 dark:text-white font-black">
+                                          {formatCurrency(parseCurrencyInput(formData.amount))}
+                                        </span>
+                                      </div>
+                                    )}
+                                  </div>
                                 </div>
                               )}
                             </div>

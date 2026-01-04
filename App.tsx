@@ -140,18 +140,19 @@ const AppRoutes: React.FC = () => {
   const { user, loading } = useAuth();
   const prefersReducedMotion = useReducedMotion();
   
+  // Durante o carregamento, não redirecionar - aguardar verificação completa
   if (loading) {
-     return <div className="min-h-screen flex items-center justify-center bg-gray-50"><Loader2 className={`w-8 h-8 text-emerald-600 ${prefersReducedMotion ? '' : 'animate-spin'}`} /></div>;
+     return <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-slate-950"><Loader2 className={`w-8 h-8 text-emerald-600 ${prefersReducedMotion ? '' : 'animate-spin'}`} /></div>;
   }
 
   return (
     <Routes>
-       <Route path="/landing" element={!user ? <LandingPage /> : <Navigate to="/dashboard" />} />
-       <Route path="/login" element={!user ? <LoginPage /> : <Navigate to="/dashboard" />} />
-       <Route path="/signup" element={!user ? <SignupPage /> : <Navigate to="/dashboard" />} />
-       <Route path="/onboarding" element={user && !user.onboardingCompleted ? <OnboardingScreen /> : <Navigate to="/dashboard" />} />
-       <Route path="/dashboard/*" element={user ? (user.onboardingCompleted ? <DashboardScreen /> : <Navigate to="/onboarding" />) : <Navigate to="/landing" />} />
-       <Route path="/" element={user ? (user.onboardingCompleted ? <Navigate to="/dashboard" /> : <Navigate to="/onboarding" />) : <LandingPage />} />
+       <Route path="/landing" element={!user ? <LandingPage /> : <Navigate to="/dashboard" replace />} />
+       <Route path="/login" element={!user ? <LoginPage /> : <Navigate to="/dashboard" replace />} />
+       <Route path="/signup" element={!user ? <SignupPage /> : <Navigate to="/dashboard" replace />} />
+       <Route path="/onboarding" element={user && !user.onboardingCompleted ? <OnboardingScreen /> : (user ? <Navigate to="/dashboard" replace /> : <Navigate to="/landing" replace />)} />
+       <Route path="/dashboard/*" element={user ? (user.onboardingCompleted ? <DashboardScreen /> : <Navigate to="/onboarding" replace />) : <Navigate to="/landing" replace />} />
+       <Route path="/" element={user ? (user.onboardingCompleted ? <Navigate to="/dashboard" replace /> : <Navigate to="/onboarding" replace />) : <LandingPage />} />
     </Routes>
   );
 }

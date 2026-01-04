@@ -365,34 +365,39 @@ const SettingsTab: React.FC<{ user: any; refreshTransactions: () => void }> = ({
       try {
           const result = await seedMockData(user.id);
           const seedElapsed = Date.now() - seedStartTime;
-          // #region agent log
-          fetch('http://127.0.0.1:7242/ingest/7018d877-4b16-4a68-9ee6-6d7d4c606105',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'SettingsTab.tsx:336',message:'handleSeedData concluído',data:{seedElapsedMs:seedElapsed,success:result.success,created:result.created},timestamp:Date.now(),sessionId:'debug-session',runId:'post-fix',hypothesisId:'B'})}).catch(()=>{});
-          // #endregion
-          if (result.success && result.created) {
+          
+          console.log('[handleSeedData] Resultado:', result);
+          console.log('[handleSeedData] Tempo decorrido:', seedElapsed, 'ms');
+          
+          if (result && result.success && result.created) {
               const summary = [
-                  `${result.created.patients} Pacientes`,
-                  `${result.created.staff} Colaboradores`,
-                  `${result.created.appointments} Agendamentos`,
-                  `${result.created.transactions} Transações`,
-                  `${result.created.quotes} Orçamentos`,
-                  `${result.created.products} Produtos`,
-                  `${result.created.movements} Movimentações`,
-                  `${result.created.prescriptions} Prescrições`,
-                  `${result.created.chatThreads} Conversas`,
-                  `${result.created.chatMessages} Mensagens`
+                  `${result.created.patients || 0} Pacientes`,
+                  `${result.created.staff || 0} Colaboradores`,
+                  `${result.created.appointments || 0} Agendamentos`,
+                  `${result.created.transactions || 0} Transações`,
+                  `${result.created.quotes || 0} Orçamentos`,
+                  `${result.created.products || 0} Produtos`,
+                  `${result.created.movements || 0} Movimentações`,
+                  `${result.created.prescriptions || 0} Prescrições`,
+                  `${result.created.chatThreads || 0} Conversas`,
+                  `${result.created.chatMessages || 0} Mensagens`
               ].join(' • ');
               
-              toast.success(`✅ Dados fictícios criados com sucesso!\n\n${summary}`);
+              toast.success(`✅ Dados fictícios criados com sucesso!\n\n${summary}`, 5000);
               refreshTransactions();
               // Recarregar página após 2 segundos para atualizar todas as abas
               setTimeout(() => {
                   window.location.reload();
               }, 2000);
           } else {
-              toast.error("❌ Erro ao gerar dados de teste.");
+              const errorMsg = result?.error || result?.message || 'Erro desconhecido';
+              console.error('[handleSeedData] Erro no resultado:', errorMsg);
+              toast.error(`❌ Erro ao gerar dados: ${errorMsg}. Verifique o console para mais detalhes.`, 8000);
           }
-      } catch (error) {
-          toast.error("❌ Erro ao gerar dados de teste.");
+      } catch (error: any) {
+          console.error('[handleSeedData] Erro capturado:', error);
+          const errorMessage = error?.message || error?.toString() || 'Erro desconhecido ao gerar dados';
+          toast.error(`❌ Erro ao gerar dados de teste: ${errorMessage}`, 8000);
       } finally {
           setIsDataWorking(false);
       }
