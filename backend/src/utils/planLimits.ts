@@ -117,9 +117,22 @@ const PLAN_MODULES: Record<string, PlanModules> = {
 
 /**
  * Obtém o plano do usuário
+ * Primeiro tenta pegar da coluna plan na tabela users (mais rápido)
+ * Se não existir, busca na tabela subscriptions
  */
 export async function getUserPlan(userId: string): Promise<string> {
   try {
+    // Primeiro, tentar pegar da coluna plan na tabela users (mais direto)
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { plan: true }
+    });
+
+    if (user?.plan) {
+      return user.plan;
+    }
+
+    // Fallback: buscar na tabela subscriptions
     const subscription = await prisma.subscription.findUnique({
       where: { userId },
       select: { plan: true, status: true }

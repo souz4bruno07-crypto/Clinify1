@@ -27,6 +27,7 @@ const ClinicalKPIsTab = lazy(() => import('./dashboard/kpi').then(m => ({ defaul
 const LoyaltyAdminTab = lazy(() => import('./dashboard/loyalty').then(m => ({ default: m.LoyaltyAdminTab })));
 const AIChatWidget = lazy(() => import('./AIChatWidget'));
 const TransactionModal = lazy(() => import('./modals/TransactionModal'));
+const RenewalModal = lazy(() => import('./modals/RenewalModal'));
 const Notifications = lazy(() => import('./Notifications'));
 const CommandPalette = lazy(() => import('./CommandPalette'));
 
@@ -35,6 +36,7 @@ import ErrorBoundary from './ErrorBoundary';
 import { getMonthlyTarget, upsertMonthlyTarget, getPatients, getAppointments } from '../services/backendService';
 import { Tooltip } from './ui';
 import { Patient, Appointment } from '../types';
+import api from '../services/apiClient';
 
 // Loading fallback component
 const LoadingFallback: React.FC<{ message?: string }> = ({ message = 'Carregando...' }) => (
@@ -58,6 +60,8 @@ const DashboardScreen: React.FC = () => {
   const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
   const [isDarkMode, setIsDarkMode] = useState(() => localStorage.getItem('theme') === 'dark');
   const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState(false);
+  const [isRenewalModalOpen, setIsRenewalModalOpen] = useState(false);
+  const [subscriptionStatus, setSubscriptionStatus] = useState<any>(null);
   const prefersReducedMotion = useReducedMotion();
   
   const [monthlyGoal, setMonthlyGoal] = useState(0);
@@ -114,6 +118,43 @@ const DashboardScreen: React.FC = () => {
       cancelled = true;
     };
   }, [user?.id]); // Usar user?.id ao invés de user para evitar re-renders desnecessários
+
+  // Verificar status da subscription
+  useEffect(() => {
+    if (!user?.id) return;
+
+    const checkSubscription = async () => {
+      try {
+        const subscription = await api.get<any>('/billing/subscription');
+        setSubscriptionStatus(subscription);
+
+        // Mostrar modal se precisa renovar
+        if (subscription?.shouldShowRenewalModal) {
+          setIsRenewalModalOpen(true);
+        }
+      } catch (error: any) {
+        // Se erro 403, pode ser subscription expirada
+        if (error?.status === 403) {
+          const errorData = error?.response?.data;
+          if (errorData?.code === 'SUBSCRIPTION_EXPIRED_GRACE_PERIOD') {
+            setSubscriptionStatus({
+              requiresRenewal: true,
+              shouldShowRenewalModal: true,
+              daysRemaining: errorData.daysRemaining,
+              daysSinceExpiration: errorData.daysExpired
+            });
+            setIsRenewalModalOpen(true);
+          }
+        }
+        console.error('[DashboardScreen] Erro ao verificar subscription:', error);
+      }
+    };
+
+    checkSubscription();
+    // Verificar a cada 5 minutos
+    const interval = setInterval(checkSubscription, 5 * 60 * 1000);
+    return () => clearInterval(interval);
+  }, [user?.id]);
 
   // Command Palette keyboard shortcut
   useEffect(() => {
@@ -472,6 +513,22 @@ const DashboardScreen: React.FC = () => {
           transactions={transactions}
         />
       </Suspense>
+
+      {/* Renewal Modal */}
+      {subscriptionStatus && (
+        <Suspense fallback={null}>
+          <RenewalModal
+            isOpen={isRenewalModalOpen}
+            onClose={() => setIsRenewalModalOpen(false)}
+            subscription={subscriptionStatus}
+            onRenewalSuccess={() => {
+              setIsRenewalModalOpen(false);
+              // Recarregar subscription status
+              api.get('/billing/subscription').then(setSubscriptionStatus).catch(console.error);
+            }}
+          />
+        </Suspense>
+      )}
 
       {/* Command Palette */}
       <Suspense fallback={null}>

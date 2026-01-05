@@ -32,6 +32,9 @@ const updateUserSchema = z.object({
   email: z.string().email('Email inválido').optional(),
   role: z.enum(['admin', 'finance', 'reception', 'viewer'], {
     errorMap: () => ({ message: 'Role inválido' })
+  }).optional(),
+  plan: z.enum(['free', 'basic', 'professional', 'enterprise'], {
+    errorMap: () => ({ message: 'Plano inválido' })
   }).optional()
 });
 
@@ -75,6 +78,7 @@ router.get('/clinic-members', async (req: AuthRequest, res: Response): Promise<v
           clinicId: true,
           onboardingCompleted: true,
           role: true,
+          plan: true,
           avatarUrl: true
         },
         orderBy: { name: 'asc' },
@@ -95,6 +99,7 @@ router.get('/clinic-members', async (req: AuthRequest, res: Response): Promise<v
         clinicId: u.clinicId,
         onboardingCompleted: u.onboardingCompleted,
         role: u.role,
+        plan: u.plan || 'free',
         avatar_url: u.avatarUrl
       })),
       pagination: {
@@ -300,6 +305,7 @@ router.put('/:id', async (req: AuthRequest, res: Response): Promise<void> => {
       clinicId: updatedUser.clinicId,
       onboardingCompleted: updatedUser.onboardingCompleted,
       role: updatedUser.role,
+      plan: updatedUser.plan || 'free',
       avatar_url: updatedUser.avatarUrl
     });
   } catch (error) {

@@ -9,6 +9,7 @@ export interface User {
   clinicId: string; // ID da clínica (geralmente o ID do proprietário original)
   onboardingCompleted: boolean;
   role: UserRole;
+  plan?: 'free' | 'basic' | 'professional' | 'enterprise';
   avatar_url?: string;
 }
 

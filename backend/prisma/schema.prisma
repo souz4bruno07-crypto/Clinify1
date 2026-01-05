@@ -23,6 +23,7 @@ model User {
   clinicId            String   @map("clinic_id")
   onboardingCompleted Boolean  @default(false) @map("onboarding_completed")
   role                UserRole @default(admin)
+  plan                SubscriptionPlan @default(free)
   avatarUrl           String?  @map("avatar_url")
   createdAt           DateTime @default(now()) @map("created_at")
   updatedAt           DateTime @updatedAt @map("updated_at")

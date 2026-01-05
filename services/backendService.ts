@@ -375,6 +375,7 @@ export interface UpdateUserData {
   name?: string;
   email?: string;
   role?: UserRole;
+  plan?: 'free' | 'basic' | 'professional' | 'enterprise';
 }
 
 export const updateUser = async (userId: string, userData: UpdateUserData): Promise<User> => {
@@ -602,6 +603,11 @@ export const createStripeCheckout = async (planId: string): Promise<{ sessionId:
 
 export const createMercadoPagoCheckout = async (planId: string): Promise<{ initPoint: string; preApprovalId: string }> => {
   return api.post<{ initPoint: string; preApprovalId: string }>('/billing/checkout/mercado-pago', { planId });
+};
+
+// Admin: Obter plano de usuário
+export const getUserPlanAdmin = async (userId: string): Promise<{ plan: string; status: string; [key: string]: any }> => {
+  return api.get<{ plan: string; status: string; [key: string]: any }>(`/billing/subscription/admin/${userId}`);
 };
 
 // Admin: Atualizar plano de usuário

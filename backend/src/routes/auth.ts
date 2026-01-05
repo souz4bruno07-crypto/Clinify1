@@ -50,6 +50,28 @@ router.post('/signup', async (req, res: Response): Promise<void> => {
       data: { clinicId: user.id }
     });
 
+    // Criar subscription automaticamente com trial de 14 dias
+    const startDate = new Date();
+    const endDate = new Date();
+    endDate.setDate(endDate.getDate() + 14); // Trial de 14 dias
+
+    await prisma.subscription.create({
+      data: {
+        userId: user.id,
+        plan: 'free',
+        status: 'trialing',
+        startDate: startDate,
+        endDate: endDate,
+        cancelAtPeriodEnd: false
+      }
+    });
+
+    // Atualizar o plano do usuário também
+    await prisma.user.update({
+      where: { id: user.id },
+      data: { plan: 'free' }
+    });
+
     const token = generateToken(user.id, user.role);
 
     res.status(201).json({

@@ -13,9 +13,11 @@ import { User, UserRole } from '../../types';
 import DataImportModal from '../modals/DataImportModal';
 import UserInviteModal from '../modals/UserInviteModal';
 import UserEditModal from '../modals/UserEditModal';
+import PlanEditModal from '../modals/PlanEditModal';
 import { useToast } from '../../contexts/ToastContext';
 import { useConfirmDialog } from '../ui/ConfirmDialog';
 import SubscriptionTab from './SubscriptionTab';
+import { getSubscription } from '../../services/backendService';
 
 const SettingsTab: React.FC<{ user: any; refreshTransactions: () => void }> = ({ user, refreshTransactions }) => {
   const { signOut } = useAuth();
@@ -35,6 +37,9 @@ const SettingsTab: React.FC<{ user: any; refreshTransactions: () => void }> = ({
   const [isInviteModalOpen, setIsInviteModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<User | null>(null);
+  const [isPlanModalOpen, setIsPlanModalOpen] = useState(false);
+  const [editingPlanUserId, setEditingPlanUserId] = useState<string | null>(null);
+  const [userPlans, setUserPlans] = useState<Record<string, string>>({});
 
   const loadMembers = async () => {
     if (!user?.clinicId) return;
@@ -48,6 +53,16 @@ const SettingsTab: React.FC<{ user: any; refreshTransactions: () => void }> = ({
       fetch('http://127.0.0.1:7242/ingest/7018d877-4b16-4a68-9ee6-6d7d4c606105',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'SettingsTab.tsx:43',message:'getClinicMembers retornou',data:{membersType:typeof members,isArray:Array.isArray(members),membersLength:Array.isArray(members)?members.length:0},timestamp:Date.now(),sessionId:'debug-session',runId:'post-fix',hypothesisId:'A'})}).catch(()=>{});
       // #endregion
       setClinicUsers(members);
+      
+      // Carregar planos dos usuários diretamente do campo plan (muito mais simples!)
+      if (canManageUsers) {
+        const plansMap: Record<string, string> = {};
+        members.forEach((member: any) => {
+          plansMap[member.id] = member.plan || 'free';
+        });
+        setUserPlans(plansMap);
+      }
+      
       // #region agent log
       fetch('http://127.0.0.1:7242/ingest/7018d877-4b16-4a68-9ee6-6d7d4c606105',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'SettingsTab.tsx:44',message:'clinicUsers setado',data:{clinicUsersType:typeof members,clinicUsersIsArray:Array.isArray(members)},timestamp:Date.now(),sessionId:'debug-session',runId:'post-fix',hypothesisId:'A'})}).catch(()=>{});
       // #endregion
@@ -62,6 +77,11 @@ const SettingsTab: React.FC<{ user: any; refreshTransactions: () => void }> = ({
     } finally {
       setLoadingUsers(false);
     }
+  };
+
+  const handleEditPlan = (member: User) => {
+    setEditingPlanUserId(member.id);
+    setIsPlanModalOpen(true);
   };
 
   useEffect(() => {
@@ -518,6 +538,7 @@ const SettingsTab: React.FC<{ user: any; refreshTransactions: () => void }> = ({
                                        <tr>
                                            <th className="px-8 py-5 text-[9px] font-black text-slate-500 uppercase tracking-widest">Colaborador</th>
                                            <th className="px-8 py-5 text-[9px] font-black text-slate-500 uppercase tracking-widest">Cargo</th>
+                                           <th className="px-8 py-5 text-[9px] font-black text-slate-500 uppercase tracking-widest">Plano</th>
                                            <th className="px-8 py-5 text-[9px] font-black text-slate-500 uppercase tracking-widest">Status</th>
                                            {canManageUsers && (
                                                <th className="px-8 py-5 text-[9px] font-black text-slate-500 uppercase tracking-widest text-right">Ações</th>
@@ -549,6 +570,18 @@ const SettingsTab: React.FC<{ user: any; refreshTransactions: () => void }> = ({
                                                    </td>
                                                    <td className="px-8 py-6">
                                                        <div className="flex items-center gap-2">
+                                                           <span className={`text-[9px] font-black uppercase px-3 py-1.5 rounded-lg ${
+                                                               userPlans[member.id] === 'enterprise' ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400' :
+                                                               userPlans[member.id] === 'professional' ? 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400' :
+                                                               userPlans[member.id] === 'basic' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400' :
+                                                               'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300'
+                                                           }`}>
+                                                               {userPlans[member.id] ? userPlans[member.id].toUpperCase() : 'FREE'}
+                                                           </span>
+                                                       </div>
+                                                   </td>
+                                                   <td className="px-8 py-6">
+                                                       <div className="flex items-center gap-2">
                                                            <div className="w-1.5 h-1.5 bg-emerald-500 rounded-full"></div>
                                                            <span className="text-[10px] font-black uppercase text-slate-500">Ativo</span>
                                                        </div>
@@ -556,6 +589,13 @@ const SettingsTab: React.FC<{ user: any; refreshTransactions: () => void }> = ({
                                                    {canManageUsers && (
                                                        <td className="px-8 py-6">
                                                            <div className="flex items-center justify-end gap-2">
+                                                               <button
+                                                                   onClick={() => handleEditPlan(member)}
+                                                                   className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 rounded-lg transition-all"
+                                                                   title="Gerenciar plano"
+                                                               >
+                                                                   <CreditCard className="w-4 h-4" />
+                                                               </button>
                                                                <button
                                                                    onClick={() => handleEditUser(member)}
                                                                    className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 rounded-lg transition-all"
@@ -698,6 +738,21 @@ const SettingsTab: React.FC<{ user: any; refreshTransactions: () => void }> = ({
         onSuccess={handleEditSuccess}
         user={editingUser}
       />
+      
+      {editingPlanUserId && (
+        <PlanEditModal
+          isOpen={isPlanModalOpen}
+          onClose={() => { setIsPlanModalOpen(false); setEditingPlanUserId(null); }}
+          onSuccess={() => { 
+            loadMembers(); 
+            setIsPlanModalOpen(false); 
+            setEditingPlanUserId(null); 
+          }}
+          userId={editingPlanUserId}
+          userName={clinicUsers.find(u => u.id === editingPlanUserId)?.name || 'Usuário'}
+          currentPlan={userPlans[editingPlanUserId]}
+        />
+      )}
     </div>
   );
 };

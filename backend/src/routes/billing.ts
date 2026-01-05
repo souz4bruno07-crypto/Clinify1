@@ -214,6 +214,24 @@ router.get('/subscription', async (req: AuthRequest, res: Response): Promise<voi
       return;
     }
 
+    const now = new Date();
+    const endDate = subscription.endDate ? new Date(subscription.endDate) : null;
+    const isExpired = endDate && endDate < now;
+    const paidPlans = ['basic', 'professional', 'enterprise'];
+    const isPaidPlan = paidPlans.includes(subscription.plan);
+
+    let daysSinceExpiration = 0;
+    let daysRemaining = 0;
+    let requiresRenewal = false;
+    let shouldShowRenewalModal = false;
+
+    if (isExpired && isPaidPlan) {
+      daysSinceExpiration = Math.floor((now.getTime() - endDate!.getTime()) / (1000 * 60 * 60 * 24));
+      daysRemaining = Math.max(0, 30 - daysSinceExpiration);
+      requiresRenewal = true;
+      shouldShowRenewalModal = daysSinceExpiration < 30; // Mostrar modal se ainda está no grace period
+    }
+
     res.json({
       id: subscription.id,
       plan: subscription.plan,
@@ -225,7 +243,15 @@ router.get('/subscription', async (req: AuthRequest, res: Response): Promise<voi
       createdAt: subscription.createdAt,
       updatedAt: subscription.updatedAt,
       hasStripeIntegration: !!subscription.stripeCustomerId,
-      hasMercadoPagoIntegration: !!subscription.mercadoPagoCustomerId
+      hasMercadoPagoIntegration: !!subscription.mercadoPagoCustomerId,
+      // Informações sobre expiração e grace period
+      isExpired,
+      isPaidPlan,
+      daysSinceExpiration,
+      daysRemaining,
+      requiresRenewal,
+      shouldShowRenewalModal,
+      willBeDeleted: daysSinceExpiration >= 30
     });
   } catch (error) {
     logger.error('Erro ao buscar assinatura:', error);
@@ -518,6 +544,50 @@ router.post('/subscription/reactivate', async (req: AuthRequest, res: Response):
   } catch (error) {
     logger.error('Erro ao reativar assinatura:', error);
     res.status(500).json({ error: 'Erro ao reativar assinatura' });
+  }
+});
+
+// GET /api/billing/subscription/admin/:userId - Obter plano de usuário (admin only)
+router.get('/subscription/admin/:userId', async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    // Verificar se o usuário atual é admin ou superadmin
+    const currentUser = await prisma.user.findUnique({
+      where: { id: req.userId },
+      select: { role: true }
+    });
+
+    if (!currentUser || (currentUser.role !== 'admin' && currentUser.role !== 'superadmin')) {
+      res.status(403).json({ error: 'Acesso negado. Apenas administradores podem visualizar planos.' });
+      return;
+    }
+
+    const { userId } = req.params;
+
+    const subscription = await prisma.subscription.findUnique({
+      where: { userId },
+      include: { user: { select: { email: true, name: true, clinicName: true } } }
+    });
+
+    if (!subscription) {
+      res.status(200).json({ plan: 'free', status: 'active' });
+      return;
+    }
+
+    res.json({
+      id: subscription.id,
+      plan: subscription.plan,
+      status: subscription.status,
+      startDate: subscription.startDate,
+      endDate: subscription.endDate,
+      cancelAtPeriodEnd: subscription.cancelAtPeriodEnd,
+      canceledAt: subscription.canceledAt,
+      createdAt: subscription.createdAt,
+      updatedAt: subscription.updatedAt,
+      user: subscription.user
+    });
+  } catch (error) {
+    logger.error('Erro ao buscar plano (admin):', error);
+    res.status(500).json({ error: 'Erro ao buscar plano' });
   }
 });
 
