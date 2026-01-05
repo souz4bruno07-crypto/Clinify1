@@ -242,12 +242,20 @@ export async function hasModuleAccess(userId: string, module: keyof PlanModules)
   const modules = await getUserPlanModules(userId);
   const access = modules[module];
   
+  if (access === undefined) {
+    return false;
+  }
+  
   if (typeof access === 'boolean') {
     return access;
   }
   
   // Se for 'basic' ou 'advanced', considera como acesso permitido
-  return access !== false;
+  if (access === 'basic' || access === 'advanced') {
+    return true;
+  }
+  
+  return false;
 }
 
 /**
