@@ -93,14 +93,7 @@ export async function cleanupExpiredData() {
   }
 }
 
-// Se executado diretamente (não como módulo)
-if (require.main === module) {
-  cleanupExpiredData()
-    .then(() => {
-      process.exit(0);
-    })
-    .catch((error) => {
-      logger.error('Erro fatal na limpeza:', error);
-      process.exit(1);
-    });
-}
+// Para executar este script diretamente:
+// npx tsx src/jobs/cleanupExpiredData.ts
+// ou após build:
+// node dist/jobs/cleanupExpiredData.js

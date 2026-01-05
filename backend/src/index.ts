@@ -180,56 +180,61 @@ app.use((err: any, _req: express.Request, res: express.Response, _next: express.
   });
 });
 
-// Importar job de limpeza
-import { cleanupExpiredData } from './jobs/cleanupExpiredData.js';
-
 // Exportar o app para o Vercel (serverless)
 export default app;
 
 // Iniciar servidor apenas em desenvolvimento local
-if (process.env.NODE_ENV !== 'production' || !process.env.VERCEL) {
+// No Vercel, o app é exportado e executado como função serverless
+const isLocal = process.env.NODE_ENV !== 'production' || !process.env.VERCEL;
+
+if (isLocal) {
   app.listen(PORT, () => {
     logger.info(`🚀 Servidor rodando em http://localhost:${PORT}`);
     logger.info(`📊 Health check: http://localhost:${PORT}/health`);
     logger.info(`📚 Documentação Swagger: http://localhost:${PORT}/api/docs`);
     
-    // Iniciar job de limpeza diária (executa uma vez por dia às 2h da manhã)
+    // Iniciar job de limpeza diária apenas em ambiente local
+    // No Vercel, use Vercel Cron Jobs ou funções serverless agendadas
     startCleanupJob();
   });
 }
 
-// Job de limpeza de dados expirados
+// Job de limpeza de dados expirados (apenas em ambiente local)
 function startCleanupJob() {
-  // Executar imediatamente na primeira vez (opcional, para testes)
-  // cleanupExpiredData().catch(err => logger.error('Erro no job de limpeza:', err));
+  // Importar dinamicamente apenas quando necessário (não no Vercel)
+  import('./jobs/cleanupExpiredData.js')
+    .then(({ cleanupExpiredData }) => {
+      // Executar diariamente às 2h da manhã
+      const scheduleCleanup = () => {
+        const now = new Date();
+        const tomorrow = new Date(now);
+        tomorrow.setDate(tomorrow.getDate() + 1);
+        tomorrow.setHours(2, 0, 0, 0); // 2h da manhã
 
-  // Executar diariamente às 2h da manhã
-  const scheduleCleanup = () => {
-    const now = new Date();
-    const tomorrow = new Date(now);
-    tomorrow.setDate(tomorrow.getDate() + 1);
-    tomorrow.setHours(2, 0, 0, 0); // 2h da manhã
+        const msUntilNextRun = tomorrow.getTime() - now.getTime();
 
-    const msUntilNextRun = tomorrow.getTime() - now.getTime();
+        setTimeout(() => {
+          logger.info('🕐 Executando job de limpeza de dados expirados...');
+          cleanupExpiredData()
+            .then(() => {
+              logger.info('✅ Job de limpeza concluído');
+              // Agendar próxima execução
+              scheduleCleanup();
+            })
+            .catch((err) => {
+              logger.error('❌ Erro no job de limpeza:', err);
+              // Agendar próxima execução mesmo em caso de erro
+              scheduleCleanup();
+            });
+        }, msUntilNextRun);
 
-    setTimeout(() => {
-      logger.info('🕐 Executando job de limpeza de dados expirados...');
-      cleanupExpiredData()
-        .then(() => {
-          logger.info('✅ Job de limpeza concluído');
-          // Agendar próxima execução
-          scheduleCleanup();
-        })
-        .catch((err) => {
-          logger.error('❌ Erro no job de limpeza:', err);
-          // Agendar próxima execução mesmo em caso de erro
-          scheduleCleanup();
-        });
-    }, msUntilNextRun);
+        logger.info(`📅 Próxima limpeza agendada para: ${tomorrow.toLocaleString('pt-BR')}`);
+      };
 
-    logger.info(`📅 Próxima limpeza agendada para: ${tomorrow.toLocaleString('pt-BR')}`);
-  };
-
-  scheduleCleanup();
+      scheduleCleanup();
+    })
+    .catch((err) => {
+      logger.warn('⚠️  Não foi possível carregar job de limpeza (normal no Vercel):', err.message);
+    });
 }
 
