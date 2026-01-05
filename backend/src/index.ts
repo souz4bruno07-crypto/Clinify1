@@ -30,6 +30,7 @@ import prescriptionRoutes from './routes/prescriptions.js';
 import billingRoutes from './routes/billing.js';
 import loyaltyRoutes from './routes/loyalty.js';
 import medicalRecordRoutes from './routes/medical-records.js';
+import evolutionRoutes from './routes/evolution.js';
 
 // Validar variáveis de ambiente obrigatórias (isso vai encerrar o processo se faltar algo)
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -166,6 +167,7 @@ app.use('/api/prescriptions', apiLimiter, prescriptionRoutes);
 app.use('/api/billing', apiLimiter, billingRoutes);
 app.use('/api/loyalty', apiLimiter, loyaltyRoutes);
 app.use('/api/medical-records', apiLimiter, medicalRecordRoutes);
+app.use('/api/evolution', apiLimiter, evolutionRoutes);
 
 // Rotas com rate limiting para operações pesadas (aplicar em rotas específicas dentro dos routers)
 // Exemplo: router.get('/report', heavyOperationLimiter, ...)

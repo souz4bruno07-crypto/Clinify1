@@ -48,6 +48,7 @@ model User {
   commissionPaymentReports CommissionPaymentReport[]
   medicalRecords          MedicalRecord[]
   anamnesisTemplates      AnamnesisTemplate[]
+  evolutionConfig         EvolutionConfig?
 
   @@index([clinicId, role])
   @@index([clinicId, createdAt])
@@ -272,6 +273,21 @@ model ChatThread {
 
   @@index([userId])
   @@map("chat_threads")
+}
+
+model EvolutionConfig {
+  id        String   @id @default(uuid())
+  userId    String   @unique @map("user_id")
+  apiUrl    String   @map("api_url")
+  apiKey    String   @map("api_key")
+  instance  String?  @map("instance")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("evolution_configs")
 }
 
 model ChatMessage {
