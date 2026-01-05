@@ -34,10 +34,10 @@ async function evolutionRequest(
       headers,
     });
 
-    const data = await response.json();
+    const data = await response.json() as any;
     
     if (!response.ok) {
-      throw new Error(data.message || `Erro ${response.status}`);
+      throw new Error((data as { message?: string })?.message || `Erro ${response.status}`);
     }
 
     return data;
