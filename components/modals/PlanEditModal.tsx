@@ -170,7 +170,7 @@ const PlanEditModal: React.FC<PlanEditModalProps> = ({
             </label>
             <Select
               value={formData.status}
-              onChange={(e) => setFormData(prev => ({ ...prev, status: e.target.value }))}
+              onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setFormData(prev => ({ ...prev, status: e.target.value }))}
               className="w-full"
             >
               <option value="active">Ativo</option>
