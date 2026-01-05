@@ -2,6 +2,7 @@ import { Router, Response } from 'express';
 import prisma from '../config/database.js';
 import { authMiddleware, AuthRequest } from '../middlewares/auth.js';
 import { debugLog } from '../utils/debugLog.js';
+import { canCreateTransaction, hasModuleAccess } from '../utils/planLimits.js';
 
 const router = Router();
 
@@ -154,6 +155,26 @@ router.get('/', async (req: AuthRequest, res: Response): Promise<void> => {
 // POST /api/transactions
 router.post('/', async (req: AuthRequest, res: Response): Promise<void> => {
   try {
+    // Verificar se o módulo financeiro está disponível
+    const hasFinanceAccess = await hasModuleAccess(req.userId!, 'finance');
+    if (!hasFinanceAccess) {
+      res.status(403).json({ 
+        error: 'Módulo financeiro não está disponível no seu plano. Faça upgrade para acessar esta funcionalidade.'
+      });
+      return;
+    }
+
+    // Verificar limitações do plano
+    const limitCheck = await canCreateTransaction(req.userId!);
+    if (!limitCheck.allowed) {
+      res.status(403).json({ 
+        error: `Limite de transações mensais atingido. Seu plano permite ${limitCheck.limit} transações por mês e você já possui ${limitCheck.current}. Faça upgrade para aumentar o limite.`,
+        limit: limitCheck.limit,
+        current: limitCheck.current
+      });
+      return;
+    }
+
     const { description, amount, type, category, date, patientName, paymentMethod, isPaid, tags } = req.body;
 
     const transaction = await prisma.transaction.create({

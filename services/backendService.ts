@@ -604,6 +604,11 @@ export const createMercadoPagoCheckout = async (planId: string): Promise<{ initP
   return api.post<{ initPoint: string; preApprovalId: string }>('/billing/checkout/mercado-pago', { planId });
 };
 
+// Admin: Atualizar plano de usuário
+export const updateUserPlanAdmin = async (userId: string, plan: string, status?: string, endDate?: string): Promise<{ success: boolean; message: string; subscription: any }> => {
+  return api.put<{ success: boolean; message: string; subscription: any }>(`/billing/subscription/admin/${userId}`, { plan, status, endDate });
+};
+
 // --- LOYALTY / FIDELIDADE ---
 
 import { PatientLoyalty, LoyaltyReward } from '../types';

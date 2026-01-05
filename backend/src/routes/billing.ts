@@ -521,6 +521,83 @@ router.post('/subscription/reactivate', async (req: AuthRequest, res: Response):
   }
 });
 
+// PUT /api/billing/subscription/admin/:userId - Atualizar plano de usuário (admin only)
+router.put('/subscription/admin/:userId', async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    // Verificar se o usuário atual é admin ou superadmin
+    const currentUser = await prisma.user.findUnique({
+      where: { id: req.userId },
+      select: { role: true }
+    });
+
+    if (!currentUser || (currentUser.role !== 'admin' && currentUser.role !== 'superadmin')) {
+      res.status(403).json({ error: 'Acesso negado. Apenas administradores podem atualizar planos.' });
+      return;
+    }
+
+    const { userId } = req.params;
+    const { plan, status, endDate } = req.body;
+
+    if (!plan || !['free', 'basic', 'professional', 'enterprise'].includes(plan)) {
+      res.status(400).json({ error: 'Plano inválido. Deve ser: free, basic, professional ou enterprise' });
+      return;
+    }
+
+    // Verificar se o usuário existe
+    const targetUser = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { id: true, email: true, name: true }
+    });
+
+    if (!targetUser) {
+      res.status(404).json({ error: 'Usuário não encontrado' });
+      return;
+    }
+
+    // Atualizar ou criar assinatura
+    const subscriptionData: any = {
+      plan,
+      status: status || 'active',
+      userId
+    };
+
+    if (endDate) {
+      subscriptionData.endDate = new Date(endDate);
+    } else if (!status || status === 'active') {
+      // Se não especificar endDate e status for active, definir para 1 ano
+      subscriptionData.endDate = new Date(Date.now() + 365 * 24 * 60 * 60 * 1000);
+    }
+
+    const subscription = await prisma.subscription.upsert({
+      where: { userId },
+      update: subscriptionData,
+      create: {
+        ...subscriptionData,
+        startDate: new Date()
+      }
+    });
+
+    logger.info(`[Admin] Plano atualizado para usuário ${userId} por ${req.userId}: ${plan}`);
+
+    res.json({
+      success: true,
+      message: `Plano atualizado para ${targetUser.name} (${targetUser.email})`,
+      subscription: {
+        id: subscription.id,
+        userId: subscription.userId,
+        plan: subscription.plan,
+        status: subscription.status,
+        startDate: subscription.startDate,
+        endDate: subscription.endDate,
+        updatedAt: subscription.updatedAt
+      }
+    });
+  } catch (error) {
+    logger.error('Erro ao atualizar plano (admin):', error);
+    res.status(500).json({ error: 'Erro ao atualizar plano' });
+  }
+});
+
 // GET /api/billing/plans - Listar planos disponíveis
 router.get('/plans', async (req: AuthRequest, res: Response): Promise<void> => {
   try {
@@ -529,16 +606,35 @@ router.get('/plans', async (req: AuthRequest, res: Response): Promise<void> => {
         id: 'free',
         name: 'Free',
         price: 0,
+        description: 'Plano gratuito para começar',
         features: [
           'Até 50 pacientes',
           'Módulo financeiro básico',
           'Agenda simples',
+          'Relatórios básicos',
+          '1 usuário',
+          '1GB de armazenamento',
           'Suporte via email'
         ],
+        modules: {
+          finance: true,
+          patients: true,
+          appointments: true,
+          reports: 'basic',
+          crm: false,
+          inventory: false,
+          prescriptions: false,
+          loyalty: false,
+          commissions: false,
+          pep: false,
+          ai: false
+        },
         limits: {
           patients: 50,
           users: 1,
-          storage: '1GB'
+          storage: '1GB',
+          appointmentsPerMonth: 200,
+          transactionsPerMonth: 500
         },
         availableInStripe: true // Plano free sempre disponível
       },
@@ -546,17 +642,37 @@ router.get('/plans', async (req: AuthRequest, res: Response): Promise<void> => {
         id: 'basic',
         name: 'Basic',
         price: 99,
+        description: 'Ideal para clínicas pequenas',
         features: [
           'Até 200 pacientes',
           'Todos os módulos financeiros',
           'Agenda completa',
           'CRM básico',
-          'Suporte prioritário'
+          'Relatórios avançados',
+          'Até 3 usuários',
+          '10GB de armazenamento',
+          'Suporte prioritário',
+          'Exportação de dados'
         ],
+        modules: {
+          finance: true,
+          patients: true,
+          appointments: true,
+          reports: 'advanced',
+          crm: 'basic',
+          inventory: false,
+          prescriptions: false,
+          loyalty: false,
+          commissions: false,
+          pep: false,
+          ai: false
+        },
         limits: {
           patients: 200,
           users: 3,
-          storage: '10GB'
+          storage: '10GB',
+          appointmentsPerMonth: 1000,
+          transactionsPerMonth: 2000
         },
         availableInStripe: isPlanAvailableInStripe('basic')
       },
@@ -564,18 +680,41 @@ router.get('/plans', async (req: AuthRequest, res: Response): Promise<void> => {
         id: 'professional',
         name: 'Professional',
         price: 299,
+        description: 'Para clínicas em crescimento',
         features: [
           'Pacientes ilimitados',
-          'Todos os módulos',
+          'Todos os módulos incluídos',
           'Prescrições digitais',
-          'Controle de estoque avançado',
+          'Controle de estoque completo',
+          'Programa de fidelidade',
+          'Comissões e metas',
+          'Prontuário eletrônico (PEP)',
+          'IA para insights financeiros',
+          'Até 10 usuários',
+          '100GB de armazenamento',
           'API e integrações',
-          'Suporte 24/7'
+          'Suporte 24/7',
+          'Backup automático'
         ],
+        modules: {
+          finance: true,
+          patients: true,
+          appointments: true,
+          reports: 'advanced',
+          crm: 'advanced',
+          inventory: true,
+          prescriptions: true,
+          loyalty: true,
+          commissions: true,
+          pep: true,
+          ai: true
+        },
         limits: {
           patients: -1, // ilimitado
           users: 10,
-          storage: '100GB'
+          storage: '100GB',
+          appointmentsPerMonth: -1,
+          transactionsPerMonth: -1
         },
         availableInStripe: isPlanAvailableInStripe('professional')
       },
@@ -583,18 +722,44 @@ router.get('/plans', async (req: AuthRequest, res: Response): Promise<void> => {
         id: 'enterprise',
         name: 'Enterprise',
         price: 799,
+        description: 'Solução completa para grandes clínicas',
         features: [
           'Tudo do Professional',
           'Usuários ilimitados',
-          'White-label',
+          'White-label completo',
           'Integrações personalizadas',
+          'API dedicada',
+          'Customizações avançadas',
+          'Multi-filial',
           'Gerente de conta dedicado',
-          'Suporte premium'
+          'Suporte premium 24/7',
+          'Treinamento personalizado',
+          '1TB de armazenamento',
+          'SLA garantido',
+          'Auditoria e compliance'
         ],
+        modules: {
+          finance: true,
+          patients: true,
+          appointments: true,
+          reports: 'advanced',
+          crm: 'advanced',
+          inventory: true,
+          prescriptions: true,
+          loyalty: true,
+          commissions: true,
+          pep: true,
+          ai: true,
+          whiteLabel: true,
+          multiBranch: true,
+          customIntegrations: true
+        },
         limits: {
           patients: -1,
           users: -1,
-          storage: '1TB'
+          storage: '1TB',
+          appointmentsPerMonth: -1,
+          transactionsPerMonth: -1
         },
         availableInStripe: isPlanAvailableInStripe('enterprise')
       }

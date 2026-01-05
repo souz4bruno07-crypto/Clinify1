@@ -3,6 +3,7 @@ import prisma from '../config/database.js';
 import { authMiddleware, AuthRequest } from '../middlewares/auth.js';
 import { cache } from '../config/cache.js';
 import { debugLog } from '../utils/debugLog.js';
+import { canCreatePatient } from '../utils/planLimits.js';
 
 const router = Router();
 
@@ -123,6 +124,17 @@ router.get('/', async (req: AuthRequest, res: Response): Promise<void> => {
 // POST /api/patients
 router.post('/', async (req: AuthRequest, res: Response): Promise<void> => {
   try {
+    // Verificar limitações do plano
+    const limitCheck = await canCreatePatient(req.userId!);
+    if (!limitCheck.allowed) {
+      res.status(403).json({ 
+        error: `Limite de pacientes atingido. Seu plano permite ${limitCheck.limit} pacientes e você já possui ${limitCheck.current}. Faça upgrade para aumentar o limite.`,
+        limit: limitCheck.limit,
+        current: limitCheck.current
+      });
+      return;
+    }
+
     const data = req.body;
 
     const patient = await prisma.patient.create({

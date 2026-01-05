@@ -405,18 +405,18 @@ const SubscriptionTab: React.FC<{ user: any }> = ({ user }) => {
                 key={plan.id}
                 className={`relative rounded-[2rem] border-2 p-6 transition-all ${
                   isCurrentPlan
-                    ? 'border-indigo-500 bg-indigo-50 dark:bg-indigo-900/20 shadow-xl'
-                    : 'border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 hover:border-indigo-300 dark:hover:border-indigo-700'
+                    ? 'border-indigo-500 bg-indigo-50 dark:bg-indigo-900/20 shadow-xl scale-105'
+                    : 'border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 hover:border-indigo-300 dark:hover:border-indigo-700 hover:shadow-lg'
                 }`}
               >
                 {isCurrentPlan && (
-                  <div className="absolute -top-3 left-1/2 transform -translate-x-1/2 px-4 py-1 bg-indigo-600 text-white rounded-full text-[9px] font-black uppercase tracking-widest">
-                    Atual
+                  <div className="absolute -top-3 left-1/2 transform -translate-x-1/2 px-4 py-1 bg-indigo-600 text-white rounded-full text-[9px] font-black uppercase tracking-widest z-10">
+                    Plano Atual
                   </div>
                 )}
 
                 {!isPlanAvailable && plan.id !== 'free' && (
-                  <div className="absolute -top-3 right-3 px-3 py-1 bg-amber-500 text-white rounded-full text-[9px] font-black uppercase tracking-widest">
+                  <div className="absolute -top-3 right-3 px-3 py-1 bg-amber-500 text-white rounded-full text-[9px] font-black uppercase tracking-widest z-10">
                     Em breve
                   </div>
                 )}
@@ -426,16 +426,22 @@ const SubscriptionTab: React.FC<{ user: any }> = ({ user }) => {
                   <span className="font-black text-sm uppercase">{plan.name}</span>
                 </div>
 
+                {(plan as any).description && (
+                  <p className="text-xs font-bold text-slate-500 dark:text-slate-400 mb-4">
+                    {(plan as any).description}
+                  </p>
+                )}
+
                 <div className="mb-4">
                   <p className="text-3xl font-black text-slate-900 dark:text-white">
-                    {plan.price === 0 ? 'Grátis' : `R$ ${plan.price}`}
+                    {plan.price === 0 ? 'Grátis' : `R$ ${plan.price.toLocaleString('pt-BR')}`}
                   </p>
                   <p className="text-[10px] font-bold text-slate-400 uppercase">por mês</p>
                 </div>
 
-                <ul className="space-y-2 mb-6">
-                  {plan.features.slice(0, 4).map((feature, idx) => (
-                    <li key={idx} className="flex items-start gap-2 text-sm font-bold text-slate-700 dark:text-slate-300">
+                <ul className="space-y-2 mb-6 min-h-[200px]">
+                  {plan.features.map((feature, idx) => (
+                    <li key={idx} className="flex items-start gap-2 text-xs font-bold text-slate-700 dark:text-slate-300">
                       <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0 mt-0.5" />
                       <span>{feature}</span>
                     </li>
@@ -463,11 +469,76 @@ const SubscriptionTab: React.FC<{ user: any }> = ({ user }) => {
                       : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'
                   } disabled:opacity-50`}
                 >
-                  {isCurrentPlan ? 'Plano Atual' : (!isPlanAvailable && plan.id !== 'free') ? 'Indisponível' : canUpgrade ? 'Upgrade' : 'Downgrade'}
+                  {isCurrentPlan ? 'Plano Atual' : (!isPlanAvailable && plan.id !== 'free') ? 'Indisponível' : canUpgrade ? 'Fazer Upgrade' : 'Downgrade'}
                 </button>
               </div>
             );
           })}
+        </div>
+      </div>
+
+      {/* Tabela Comparativa de Módulos */}
+      <div className="bg-slate-50 dark:bg-slate-800/50 rounded-[3rem] border border-slate-200 dark:border-slate-800 p-8">
+        <h3 className="text-xl font-black text-slate-900 dark:text-white uppercase tracking-tighter mb-6">
+          Comparação de Funcionalidades
+        </h3>
+        <div className="overflow-x-auto">
+          <table className="w-full">
+            <thead>
+              <tr className="border-b-2 border-slate-200 dark:border-slate-700">
+                <th className="text-left py-4 px-4 text-sm font-black text-slate-900 dark:text-white uppercase">Módulo</th>
+                {plans.map((plan) => (
+                  <th key={plan.id} className={`text-center py-4 px-4 text-sm font-black uppercase ${
+                    subscription?.plan === plan.id 
+                      ? 'text-indigo-600 dark:text-indigo-400' 
+                      : 'text-slate-600 dark:text-slate-400'
+                  }`}>
+                    {plan.name}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {[
+                { name: 'Financeiro Completo', key: 'finance' },
+                { name: 'Gestão de Pacientes', key: 'patients' },
+                { name: 'Agenda e Agendamentos', key: 'appointments' },
+                { name: 'Relatórios Avançados', key: 'reports' },
+                { name: 'CRM', key: 'crm' },
+                { name: 'Controle de Estoque', key: 'inventory' },
+                { name: 'Prescrições Digitais', key: 'prescriptions' },
+                { name: 'Programa de Fidelidade', key: 'loyalty' },
+                { name: 'Comissões e Metas', key: 'commissions' },
+                { name: 'Prontuário Eletrônico (PEP)', key: 'pep' },
+                { name: 'IA para Insights', key: 'ai' },
+              ].map((module) => (
+                <tr key={module.key} className="border-b border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800/50">
+                  <td className="py-3 px-4 text-sm font-bold text-slate-700 dark:text-slate-300">{module.name}</td>
+                  {plans.map((plan) => {
+                    const modules = (plan as any).modules || {};
+                    const value = modules[module.key];
+                    const hasAccess = value === true || value === 'advanced' || value === 'basic';
+                    const isAdvanced = value === 'advanced';
+                    
+                    return (
+                      <td key={plan.id} className="text-center py-3 px-4">
+                        {hasAccess ? (
+                          <div className="flex items-center justify-center gap-1">
+                            <CheckCircle2 className={`w-5 h-5 ${isAdvanced ? 'text-emerald-500' : 'text-blue-500'}`} />
+                            {isAdvanced && (
+                              <span className="text-[9px] font-black text-emerald-600 dark:text-emerald-400 uppercase">Pro</span>
+                            )}
+                          </div>
+                        ) : (
+                          <XCircle className="w-5 h-5 text-slate-300 dark:text-slate-600 mx-auto" />
+                        )}
+                      </td>
+                    );
+                  })}
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       </div>
 
