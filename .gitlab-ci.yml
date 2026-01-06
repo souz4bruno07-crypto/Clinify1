@@ -8,11 +8,11 @@ variables:
   DOCKER_DRIVER: overlay2
   DOCKER_TLS_CERTDIR: "/certs"
 
-# Cache para node_modules
-cache:
-  paths:
-    - backend/node_modules/
-    - node_modules/
+# Cache para node_modules (desabilitado temporariamente para debug)
+# cache:
+#   paths:
+#     - backend/node_modules/
+#     - node_modules/
 
 # Testes
 test:backend:
