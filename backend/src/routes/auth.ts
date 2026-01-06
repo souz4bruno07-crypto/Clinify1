@@ -1,157 +1,126 @@
 import { Router, Response } from 'express';
 import bcrypt from 'bcryptjs';
 import prisma from '../config/database.js';
-import { generateToken, authMiddleware, AuthRequest } from '../middlewares/auth.js';
-import { z } from 'zod';
+import { 
+  generateTokenPair, 
+  generateToken,
+  authMiddleware, 
+  AuthRequest,
+  revokeToken,
+  verifyRefreshToken
+} from '../middlewares/auth.js';
+import { asyncHandler } from '../middlewares/errorHandler.js';
+import { 
+  signUpSchema, 
+  signInSchema, 
+  refreshTokenSchema,
+  resetPasswordSchema,
+  changePasswordSchema
+} from '../validators/auth.validator.js';
+import { ConflictError, UnauthorizedError, NotFoundError } from '../utils/errors.js';
+import { sanitizeFields } from '../utils/sanitize.js';
+import { logger } from '../config/logger.js';
 
 const router = Router();
 
-// Schemas de validação
-const signUpSchema = z.object({
-  email: z.string().email('Email inválido'),
-  password: z.string().min(6, 'Senha deve ter no mínimo 6 caracteres'),
-  name: z.string().min(2, 'Nome é obrigatório'),
-  clinicName: z.string().min(2, 'Nome da clínica é obrigatório')
-});
-
-const signInSchema = z.object({
-  email: z.string().email('Email inválido'),
-  password: z.string().min(1, 'Senha é obrigatória')
-});
-
 // POST /api/auth/signup
-router.post('/signup', async (req, res: Response): Promise<void> => {
-  try {
-    const { email, password, name, clinicName } = signUpSchema.parse(req.body);
+router.post('/signup', asyncHandler(async (req, res: Response) => {
+  // Sanitizar e validar entrada
+  const sanitized = sanitizeFields(req.body, ['email', 'name', 'clinicName']);
+  const { email, password, name, clinicName } = signUpSchema.parse(sanitized);
 
-    const existingUser = await prisma.user.findUnique({ where: { email } });
-    if (existingUser) {
-      res.status(400).json({ error: 'Email já cadastrado' });
-      return;
-    }
-
-    const hashedPassword = await bcrypt.hash(password, 10);
-
-    const user = await prisma.user.create({
-      data: {
-        email,
-        password: hashedPassword,
-        name,
-        clinicName,
-        clinicId: '', // será atualizado após criação
-        role: 'admin',
-        onboardingCompleted: false
-      }
-    });
-
-    // Atualizar clinicId para o próprio ID do usuário (proprietário)
-    await prisma.user.update({
-      where: { id: user.id },
-      data: { clinicId: user.id }
-    });
-
-    // Criar subscription automaticamente com trial de 14 dias
-    const startDate = new Date();
-    const endDate = new Date();
-    endDate.setDate(endDate.getDate() + 14); // Trial de 14 dias
-
-    await prisma.subscription.create({
-      data: {
-        userId: user.id,
-        plan: 'free',
-        status: 'trialing',
-        startDate: startDate,
-        endDate: endDate,
-        cancelAtPeriodEnd: false
-      }
-    });
-
-    // Atualizar o plano do usuário também
-    await prisma.user.update({
-      where: { id: user.id },
-      data: { plan: 'free' }
-    });
-
-    const token = generateToken(user.id, user.role);
-
-    res.status(201).json({
-      user: {
-        id: user.id,
-        email: user.email,
-        name: user.name,
-        clinicName: user.clinicName,
-        clinicId: user.id,
-        onboardingCompleted: user.onboardingCompleted,
-        role: user.role,
-        avatar_url: user.avatarUrl
-      },
-      token
-    });
-  } catch (error) {
-    if (error instanceof z.ZodError) {
-      res.status(400).json({ error: error.errors[0].message });
-      return;
-    }
-    console.error('Erro signup:', error);
-    res.status(500).json({ error: 'Erro ao criar conta' });
+  // Verificar se email já existe
+  const existingUser = await prisma.user.findUnique({ where: { email } });
+  if (existingUser) {
+    throw new ConflictError('Email já cadastrado');
   }
-});
+
+  // Hash da senha
+  const hashedPassword = await bcrypt.hash(password, 10);
+
+  // Criar usuário
+  const user = await prisma.user.create({
+    data: {
+      email,
+      password: hashedPassword,
+      name,
+      clinicName,
+      clinicId: '', // será atualizado após criação
+      role: 'admin',
+      onboardingCompleted: false
+    }
+  });
+
+  // Atualizar clinicId para o próprio ID do usuário (proprietário)
+  await prisma.user.update({
+    where: { id: user.id },
+    data: { clinicId: user.id }
+  });
+
+  // Criar subscription automaticamente com trial de 14 dias
+  const startDate = new Date();
+  const endDate = new Date();
+  endDate.setDate(endDate.getDate() + 14); // Trial de 14 dias
+
+  await prisma.subscription.create({
+    data: {
+      userId: user.id,
+      plan: 'free',
+      status: 'trialing',
+      startDate: startDate,
+      endDate: endDate,
+      cancelAtPeriodEnd: false
+    }
+  });
+
+  // Atualizar o plano do usuário também
+  await prisma.user.update({
+    where: { id: user.id },
+    data: { plan: 'free' }
+  });
+
+  // Gerar tokens
+  const { accessToken, refreshToken } = generateTokenPair(user.id, user.role);
+
+  logger.info('Novo usuário criado:', { userId: user.id, email: user.email });
+
+  res.status(201).json({
+    user: {
+      id: user.id,
+      email: user.email,
+      name: user.name,
+      clinicName: user.clinicName,
+      clinicId: user.id,
+      onboardingCompleted: user.onboardingCompleted,
+      role: user.role,
+      avatar_url: user.avatarUrl
+    },
+    accessToken,
+    refreshToken
+  });
+}));
 
 // POST /api/auth/signin
-router.post('/signin', async (req, res: Response): Promise<void> => {
-  try {
-    const { email, password } = signInSchema.parse(req.body);
+router.post('/signin', asyncHandler(async (req, res: Response) => {
+  const { email, password } = signInSchema.parse(req.body);
 
-    const user = await prisma.user.findUnique({ where: { email } });
-    if (!user) {
-      res.status(401).json({ error: 'Credenciais inválidas' });
-      return;
-    }
-
-    const validPassword = await bcrypt.compare(password, user.password);
-    if (!validPassword) {
-      res.status(401).json({ error: 'Credenciais inválidas' });
-      return;
-    }
-
-    const token = generateToken(user.id, user.role);
-
-    res.json({
-      user: {
-        id: user.id,
-        email: user.email,
-        name: user.name,
-        clinicName: user.clinicName,
-        clinicId: user.clinicId,
-        onboardingCompleted: user.onboardingCompleted,
-        role: user.role,
-        avatar_url: user.avatarUrl
-      },
-      token
-    });
-  } catch (error) {
-    if (error instanceof z.ZodError) {
-      res.status(400).json({ error: error.errors[0].message });
-      return;
-    }
-    console.error('Erro signin:', error);
-    res.status(500).json({ error: 'Erro ao fazer login' });
+  const user = await prisma.user.findUnique({ where: { email } });
+  if (!user) {
+    throw new UnauthorizedError('Credenciais inválidas');
   }
-});
 
-// GET /api/auth/me
-router.get('/me', authMiddleware, async (req: AuthRequest, res: Response): Promise<void> => {
-  try {
-    const user = await prisma.user.findUnique({
-      where: { id: req.userId }
-    });
+  const validPassword = await bcrypt.compare(password, user.password);
+  if (!validPassword) {
+    throw new UnauthorizedError('Credenciais inválidas');
+  }
 
-    if (!user) {
-      res.status(404).json({ error: 'Usuário não encontrado' });
-      return;
-    }
+  // Gerar tokens
+  const { accessToken, refreshToken } = generateTokenPair(user.id, user.role);
 
-    res.json({
+  logger.info('Login realizado:', { userId: user.id, email: user.email });
+
+  res.json({
+    user: {
       id: user.id,
       email: user.email,
       name: user.name,
@@ -160,39 +129,137 @@ router.get('/me', authMiddleware, async (req: AuthRequest, res: Response): Promi
       onboardingCompleted: user.onboardingCompleted,
       role: user.role,
       avatar_url: user.avatarUrl
-    });
-  } catch (error) {
-    console.error('Erro me:', error);
-    res.status(500).json({ error: 'Erro ao buscar usuário' });
+    },
+    accessToken,
+    refreshToken
+  });
+}));
+
+// POST /api/auth/refresh
+router.post('/refresh', asyncHandler(async (req, res: Response) => {
+  const { refreshToken: token } = refreshTokenSchema.parse(req.body);
+
+  // Verificar refresh token
+  const { id } = verifyRefreshToken(token);
+
+  // Buscar usuário
+  const user = await prisma.user.findUnique({ where: { id } });
+  if (!user) {
+    throw new NotFoundError('Usuário');
   }
-});
+
+  // Gerar novo par de tokens
+  const { accessToken, refreshToken: newRefreshToken } = generateTokenPair(user.id, user.role);
+
+  // Revogar refresh token antigo (opcional, mas recomendado)
+  await revokeToken(token);
+
+  res.json({
+    accessToken,
+    refreshToken: newRefreshToken
+  });
+}));
+
+// POST /api/auth/logout
+router.post('/logout', authMiddleware, asyncHandler(async (req: AuthRequest, res: Response) => {
+  const authHeader = req.headers.authorization;
+  if (authHeader) {
+    const token = authHeader.split(' ')[1];
+    await revokeToken(token);
+  }
+
+  // Se houver refresh token no body, revogar também
+  if (req.body.refreshToken) {
+    await revokeToken(req.body.refreshToken);
+  }
+
+  logger.info('Logout realizado:', { userId: req.userId });
+
+  res.json({ success: true, message: 'Logout realizado com sucesso' });
+}));
+
+// GET /api/auth/me
+router.get('/me', authMiddleware, asyncHandler(async (req: AuthRequest, res: Response) => {
+  const user = await prisma.user.findUnique({
+    where: { id: req.userId }
+  });
+
+  if (!user) {
+    throw new NotFoundError('Usuário');
+  }
+
+  res.json({
+    id: user.id,
+    email: user.email,
+    name: user.name,
+    clinicName: user.clinicName,
+    clinicId: user.clinicId,
+    onboardingCompleted: user.onboardingCompleted,
+    role: user.role,
+    avatar_url: user.avatarUrl
+  });
+}));
 
 // PUT /api/auth/complete-onboarding
-router.put('/complete-onboarding', authMiddleware, async (req: AuthRequest, res: Response): Promise<void> => {
-  try {
-    await prisma.user.update({
-      where: { id: req.userId },
-      data: { onboardingCompleted: true }
-    });
-    res.json({ success: true });
-  } catch (error) {
-    console.error('Erro onboarding:', error);
-    res.status(500).json({ error: 'Erro ao completar onboarding' });
-  }
-});
+router.put('/complete-onboarding', authMiddleware, asyncHandler(async (req: AuthRequest, res: Response) => {
+  await prisma.user.update({
+    where: { id: req.userId },
+    data: { onboardingCompleted: true }
+  });
+  
+  logger.info('Onboarding completado:', { userId: req.userId });
+  
+  res.json({ success: true });
+}));
 
 // POST /api/auth/reset-password
-router.post('/reset-password', async (req, res: Response): Promise<void> => {
-  try {
-    const { email } = req.body;
-    // Aqui você implementaria o envio de email com link de reset
-    // Por enquanto, apenas retornamos sucesso
-    console.log(`Reset password solicitado para: ${email}`);
-    res.json({ success: true, message: 'Se o email existir, você receberá instruções' });
-  } catch (error) {
-    res.status(500).json({ error: 'Erro ao processar solicitação' });
+router.post('/reset-password', asyncHandler(async (req, res: Response) => {
+  const { email } = resetPasswordSchema.parse(req.body);
+  
+  // Verificar se usuário existe (não revelar se não existir por segurança)
+  const user = await prisma.user.findUnique({ where: { email } });
+  
+  if (user) {
+    // TODO: Implementar envio de email com link de reset
+    // Por enquanto, apenas logar
+    logger.info('Reset de senha solicitado:', { email, userId: user.id });
   }
-});
+  
+  // Sempre retornar sucesso (não revelar se email existe)
+  res.json({ 
+    success: true, 
+    message: 'Se o email existir, você receberá instruções' 
+  });
+}));
+
+// POST /api/auth/change-password
+router.post('/change-password', authMiddleware, asyncHandler(async (req: AuthRequest, res: Response) => {
+  const { currentPassword, newPassword } = changePasswordSchema.parse(req.body);
+  
+  const user = await prisma.user.findUnique({ where: { id: req.userId } });
+  if (!user) {
+    throw new NotFoundError('Usuário');
+  }
+  
+  // Verificar senha atual
+  const validPassword = await bcrypt.compare(currentPassword, user.password);
+  if (!validPassword) {
+    throw new UnauthorizedError('Senha atual incorreta');
+  }
+  
+  // Hash da nova senha
+  const hashedPassword = await bcrypt.hash(newPassword, 10);
+  
+  // Atualizar senha
+  await prisma.user.update({
+    where: { id: req.userId },
+    data: { password: hashedPassword }
+  });
+  
+  logger.info('Senha alterada:', { userId: req.userId });
+  
+  res.json({ success: true, message: 'Senha alterada com sucesso' });
+}));
 
 export default router;
 

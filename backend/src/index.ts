@@ -7,6 +7,8 @@ import rateLimit from 'express-rate-limit';
 import swaggerUi from 'swagger-ui-express';
 import { swaggerSpec } from './config/swagger.js';
 import { env } from './config/env.js';
+import { securityMiddleware, customSecurityHeaders } from './middlewares/security.js';
+import { errorHandler } from './middlewares/errorHandler.js';
 
 // Estender o tipo Request para incluir rateLimit
 interface RateLimitRequest extends Request {
@@ -94,7 +96,10 @@ const heavyOperationLimiter = rateLimit({
   },
 });
 
-// Middlewares
+// Middlewares de segurança
+app.use(securityMiddleware);
+app.use(customSecurityHeaders);
+
 // CORS - permitir requisições do frontend e health checks
 app.use(cors({
   origin: (origin, callback) => {
@@ -174,13 +179,8 @@ app.use('/api/evolution', apiLimiter, evolutionRoutes);
 
 import { logger } from './config/logger.js';
 
-// Error handler global
-app.use((err: any, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
-  logger.error('Erro não tratado:', err);
-  res.status(err.status || 500).json({
-    error: err.message || 'Erro interno do servidor'
-  });
-});
+// Error handler global (deve ser o último middleware)
+app.use(errorHandler);
 
 // Exportar o app para o Vercel (serverless)
 export default app;

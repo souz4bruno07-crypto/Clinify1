@@ -6,12 +6,14 @@
 interface EnvConfig {
   DATABASE_URL: string;
   JWT_SECRET: string;
+  JWT_REFRESH_SECRET: string;
   FRONTEND_URL: string;
   PORT: number;
   NODE_ENV: 'development' | 'production' | 'test';
   REDIS_HOST?: string;
   REDIS_PORT?: number;
   REDIS_PASSWORD?: string;
+  REDIS_URL?: string;
   // Pagamentos (opcionais)
   STRIPE_SECRET_KEY?: string;
   STRIPE_WEBHOOK_SECRET?: string;
@@ -22,7 +24,7 @@ interface EnvConfig {
   MERCADOPAGO_WEBHOOK_SECRET?: string;
 }
 
-const requiredEnvVars = ['DATABASE_URL', 'JWT_SECRET'] as const;
+const requiredEnvVars = ['DATABASE_URL', 'JWT_SECRET', 'JWT_REFRESH_SECRET'] as const;
 
 export function validateEnv(): EnvConfig {
   const missing: string[] = [];
@@ -69,15 +71,33 @@ export function validateEnv(): EnvConfig {
     console.warn('💡 Dica: Gere uma chave secreta forte usando: openssl rand -base64 32\n');
   }
 
+  // Validar JWT_REFRESH_SECRET - deve ter pelo menos 32 caracteres
+  if (process.env.JWT_REFRESH_SECRET && process.env.JWT_REFRESH_SECRET.length < 32) {
+    console.warn('⚠️  Aviso: JWT_REFRESH_SECRET deve ter pelo menos 32 caracteres para segurança.');
+    console.warn('💡 Dica: Gere uma chave secreta forte usando: openssl rand -base64 32\n');
+  }
+
+  // Construir REDIS_URL se não fornecido
+  let redisUrl: string | undefined;
+  if (process.env.REDIS_URL) {
+    redisUrl = process.env.REDIS_URL;
+  } else if (process.env.REDIS_HOST) {
+    const password = process.env.REDIS_PASSWORD ? `:${process.env.REDIS_PASSWORD}@` : '';
+    const port = process.env.REDIS_PORT || '6379';
+    redisUrl = `redis://${password}${process.env.REDIS_HOST}:${port}`;
+  }
+
   const config: EnvConfig = {
     DATABASE_URL: process.env.DATABASE_URL!,
     JWT_SECRET: process.env.JWT_SECRET!,
+    JWT_REFRESH_SECRET: process.env.JWT_REFRESH_SECRET!,
     FRONTEND_URL: process.env.FRONTEND_URL || 'http://localhost:5173',
     PORT: parseInt(process.env.PORT || '3001', 10),
     NODE_ENV: (process.env.NODE_ENV || 'development') as 'development' | 'production' | 'test',
     REDIS_HOST: process.env.REDIS_HOST,
     REDIS_PORT: process.env.REDIS_PORT ? parseInt(process.env.REDIS_PORT, 10) : undefined,
     REDIS_PASSWORD: process.env.REDIS_PASSWORD,
+    REDIS_URL: redisUrl,
     // Pagamentos (opcionais)
     STRIPE_SECRET_KEY: process.env.STRIPE_SECRET_KEY,
     STRIPE_WEBHOOK_SECRET: process.env.STRIPE_WEBHOOK_SECRET,

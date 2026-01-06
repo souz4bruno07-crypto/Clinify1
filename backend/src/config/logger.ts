@@ -1,68 +1,65 @@
 /**
- * Sistema de Logging
- * Substitui console.log/error/warn por um sistema mais estruturado
- * Pode ser expandido para winston/pino no futuro
+ * Sistema de Logging estruturado com Winston
+ * Logs estruturados em JSON para produção
  */
 
-type LogLevel = 'debug' | 'info' | 'warn' | 'error';
+import winston from 'winston';
+import { env } from './env.js';
 
-interface Logger {
-  debug(message: string, ...args: any[]): void;
-  info(message: string, ...args: any[]): void;
-  warn(message: string, ...args: any[]): void;
-  error(message: string, ...args: any[]): void;
+const logFormat = winston.format.combine(
+  winston.format.timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }),
+  winston.format.errors({ stack: true }),
+  winston.format.splat(),
+  winston.format.json()
+);
+
+const consoleFormat = winston.format.combine(
+  winston.format.colorize(),
+  winston.format.timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }),
+  winston.format.printf(({ timestamp, level, message, ...meta }) => {
+    const metaStr = Object.keys(meta).length ? JSON.stringify(meta, null, 2) : '';
+    return `${timestamp} [${level}]: ${message} ${metaStr}`;
+  })
+);
+
+const transports: winston.transport[] = [];
+
+// Em produção, salvar logs em arquivos
+if (env.NODE_ENV === 'production') {
+  transports.push(
+    new winston.transports.File({
+      filename: 'logs/error.log',
+      level: 'error',
+      format: logFormat,
+      maxsize: 5242880, // 5MB
+      maxFiles: 5
+    }),
+    new winston.transports.File({
+      filename: 'logs/combined.log',
+      format: logFormat,
+      maxsize: 5242880, // 5MB
+      maxFiles: 5
+    })
+  );
 }
 
-class SimpleLogger implements Logger {
-  private isDevelopment: boolean;
+// Console sempre ativo
+transports.push(
+  new winston.transports.Console({
+    format: env.NODE_ENV === 'production' ? logFormat : consoleFormat,
+    level: env.NODE_ENV === 'production' ? 'info' : 'debug'
+  })
+);
 
-  constructor() {
-    this.isDevelopment = process.env.NODE_ENV === 'development';
-  }
+export const logger = winston.createLogger({
+  level: process.env.LOG_LEVEL || (env.NODE_ENV === 'production' ? 'info' : 'debug'),
+  format: logFormat,
+  transports,
+  // Não sair do processo em caso de erro de logging
+  exitOnError: false
+});
 
-  private log(level: LogLevel, message: string, ...args: any[]): void {
-    // Em produção, apenas logar errors e warns
-    if (!this.isDevelopment && (level === 'debug' || level === 'info')) {
-      return;
-    }
-
-    const timestamp = new Date().toISOString();
-    const prefix = `[${timestamp}] [${level.toUpperCase()}]`;
-
-    switch (level) {
-      case 'debug':
-        console.debug(prefix, message, ...args);
-        break;
-      case 'info':
-        console.info(prefix, message, ...args);
-        break;
-      case 'warn':
-        console.warn(prefix, message, ...args);
-        break;
-      case 'error':
-        console.error(prefix, message, ...args);
-        break;
-    }
-  }
-
-  debug(message: string, ...args: any[]): void {
-    this.log('debug', message, ...args);
-  }
-
-  info(message: string, ...args: any[]): void {
-    this.log('info', message, ...args);
-  }
-
-  warn(message: string, ...args: any[]): void {
-    this.log('warn', message, ...args);
-  }
-
-  error(message: string, ...args: any[]): void {
-    this.log('error', message, ...args);
-  }
-}
-
-export const logger = new SimpleLogger();
+// Interface para compatibilidade com código existente
 export default logger;
 
 

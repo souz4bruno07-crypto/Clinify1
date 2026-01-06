@@ -14,6 +14,9 @@
     "db:push": "prisma db push",
     "db:studio": "prisma studio",
     "db:seed": "tsx src/seed.ts",
+    "test": "vitest",
+    "test:coverage": "vitest --coverage",
+    "test:watch": "vitest --watch",
     "test:stripe": "node testar-stripe.js",
     "verify": "node verificar-conexoes.js",
     "build:all": "echo '⚠️  Este script deve ser executado da raiz do projeto.' && echo 'Execute: cd .. && npm run build:all' && exit 1"
@@ -25,12 +28,15 @@
     "dotenv": "^16.4.5",
     "express": "^4.21.1",
     "express-rate-limit": "^8.2.1",
+    "helmet": "^7.1.0",
     "ioredis": "^5.3.2",
+    "isomorphic-dompurify": "^2.9.0",
     "jsonwebtoken": "^9.0.2",
     "mercadopago": "^2.11.0",
     "stripe": "^20.1.0",
     "swagger-jsdoc": "^6.2.8",
     "swagger-ui-express": "^5.0.1",
+    "winston": "^3.11.0",
     "zod": "^3.23.8"
   },
   "devDependencies": {
@@ -41,8 +47,10 @@
     "@types/node": "^22.9.0",
     "@types/swagger-jsdoc": "^6.0.4",
     "@types/swagger-ui-express": "^4.1.6",
+    "@vitest/coverage-v8": "^1.2.0",
     "prisma": "^5.22.0",
     "tsx": "^4.19.2",
-    "typescript": "^5.6.3"
+    "typescript": "^5.6.3",
+    "vitest": "^1.2.0"
   }
 }
