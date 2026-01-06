@@ -23,7 +23,8 @@ test:backend:
     DATABASE_URL: "postgresql://user:password@localhost:5432/db?schema=public"
   before_script:
     - cd backend
-    - npm ci
+    - npm ci --ignore-scripts
+    - npm run db:generate
   script:
     - |
       # Executar testes (não falhar pipeline se testes falharem por enquanto)
@@ -47,7 +48,8 @@ build:backend:
     DATABASE_URL: "postgresql://user:password@localhost:5432/db?schema=public"
   before_script:
     - cd backend
-    - npm ci
+    - npm ci --ignore-scripts
+    - npm run db:generate
   script:
     - npm run build
   artifacts:

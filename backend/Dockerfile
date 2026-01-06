@@ -13,14 +13,14 @@ COPY prisma ./prisma/
 # Definir DATABASE_URL temporária para Prisma generate (não precisa ser válida)
 ENV DATABASE_URL="postgresql://user:password@localhost:5432/db?schema=public"
 
-# Instalar dependências
-RUN npm ci
+# Instalar dependências (ignorar scripts para evitar problemas no postinstall)
+RUN npm ci --ignore-scripts
 
 # Copiar código fonte
 COPY . .
 
 # Gerar Prisma Client e compilar
-RUN npm run build
+RUN npm run db:generate && npm run build
 
 # Production stage
 FROM node:18-alpine
