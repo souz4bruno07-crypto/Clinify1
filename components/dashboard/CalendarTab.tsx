@@ -40,6 +40,18 @@ const getProcedureStyle = (serviceName: string) => {
   return procedureColors['default'];
 };
 
+// Helper para criar datas sem problemas de timezone
+const createLocalDate = (year: number, month: number, day: number): Date => {
+  return new Date(year, month, day, 12, 0, 0, 0); // Usar meio-dia para evitar problemas de timezone
+};
+
+// Helper para comparar apenas a data (sem hora)
+const isSameDate = (date1: Date, date2: Date): boolean => {
+  return date1.getFullYear() === date2.getFullYear() &&
+         date1.getMonth() === date2.getMonth() &&
+         date1.getDate() === date2.getDate();
+};
+
 const CalendarTab: React.FC = () => {
   const { user } = useAuth();
   const toast = useToast();
@@ -47,9 +59,9 @@ const CalendarTab: React.FC = () => {
   const location = useLocation();
   const [currentDate, setCurrentDate] = useState(new Date());
   const [view, setView] = useState<'month' | 'week' | 'day'>('day');
+  const [hoveredAppt, setHoveredAppt] = useState<string | null>(null);
   const [isDatePickerOpen, setIsDatePickerOpen] = useState(false);
   const dateInputRef = useRef<HTMLInputElement>(null);
-  const [hoveredAppt, setHoveredAppt] = useState<string | null>(null);
   
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [patients, setPatients] = useState<Patient[]>([]);
@@ -363,29 +375,94 @@ const CalendarTab: React.FC = () => {
     );
   };
 
+  const handleDateSelect = (date: Date) => {
+    // Criar uma nova data no meio-dia para evitar problemas de timezone
+    const newDate = createLocalDate(date.getFullYear(), date.getMonth(), date.getDate());
+    setCurrentDate(newDate);
+  };
+
+  const handleDateInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const dateValue = e.target.value;
+    if (dateValue) {
+      // Parse da data no formato YYYY-MM-DD
+      const [year, month, day] = dateValue.split('-').map(Number);
+      const newDate = createLocalDate(year, month - 1, day); // month é 0-indexed
+      setCurrentDate(newDate);
+    }
+  };
+
   const renderDayView = () => {
     // #region agent log
     fetch('http://127.0.0.1:7242/ingest/7018d877-4b16-4a68-9ee6-6d7d4c606105',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'CalendarTab.tsx:263',message:'renderDayView - antes de filter',data:{appointmentsType:typeof appointments,appointmentsIsArray:Array.isArray(appointments),appointmentsValue:appointments,appointmentsLength:appointments?.length},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'D'})}).catch(()=>{});
     // #endregion
-    const dayAppts = Array.isArray(appointments) ? appointments.filter(a => new Date(a.startTime).toDateString() === currentDate.toDateString()) : [];
+    const dayAppts = Array.isArray(appointments) ? appointments.filter(a => {
+      const apptDate = new Date(a.startTime);
+      return isSameDate(apptDate, currentDate);
+    }) : [];
     // #region agent log
     fetch('http://127.0.0.1:7242/ingest/7018d877-4b16-4a68-9ee6-6d7d4c606105',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'CalendarTab.tsx:264',message:'renderDayView - depois de filter',data:{dayApptsLength:dayAppts.length},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'D'})}).catch(()=>{});
     // #endregion
-    const isToday = currentDate.toDateString() === new Date().toDateString();
+    const today = new Date();
+    const isToday = isSameDate(currentDate, today);
+    
+    const handlePreviousDay = () => {
+      const newDate = new Date(currentDate);
+      newDate.setDate(newDate.getDate() - 1);
+      handleDateSelect(newDate);
+    };
+
+    const handleNextDay = () => {
+      const newDate = new Date(currentDate);
+      newDate.setDate(newDate.getDate() + 1);
+      handleDateSelect(newDate);
+    };
+
+    const dateInputValue = `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, '0')}-${String(currentDate.getDate()).padStart(2, '0')}`;
     
     return (
       <div className="flex flex-col bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-[3rem] overflow-hidden shadow-xl animate-in fade-in zoom-in-95 duration-500">
           <div className="bg-slate-50 dark:bg-slate-950 p-8 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center">
-              <div>
-                  <div className="flex items-center gap-3">
-                    <h3 className="text-2xl font-black text-slate-900 dark:text-white uppercase italic tracking-tighter">{currentDate.toLocaleDateString('pt-BR', { weekday: 'long' })}</h3>
-                    {isToday && <span className="px-3 py-1 bg-emerald-500 text-white text-[10px] font-black uppercase rounded-full animate-pulse">Hoje</span>}
+              <div className="flex items-center gap-4">
+                  <div>
+                      <div className="flex items-center gap-3">
+                        <h3 className="text-2xl font-black text-slate-900 dark:text-white uppercase italic tracking-tighter">{currentDate.toLocaleDateString('pt-BR', { weekday: 'long' })}</h3>
+                        {isToday && <span className="px-3 py-1 bg-emerald-500 text-white text-[10px] font-black uppercase rounded-full animate-pulse">Hoje</span>}
+                      </div>
+                      <p className="text-xs font-black text-slate-400 uppercase tracking-widest">{dayAppts.length} atendimentos registrados</p>
                   </div>
-                  <p className="text-xs font-black text-slate-400 uppercase tracking-widest">{dayAppts.length} atendimentos registrados</p>
+                  {/* Seletor de Data */}
+                  <div className="relative">
+                    <button
+                      onClick={() => {
+                        if (dateInputRef.current) {
+                          try {
+                            (dateInputRef.current as any).showPicker();
+                          } catch (e) {
+                            dateInputRef.current.focus();
+                            dateInputRef.current.click();
+                          }
+                        }
+                      }}
+                      className="flex items-center gap-2 px-4 py-2 bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm hover:border-indigo-500 transition-colors"
+                    >
+                      <CalendarIcon className="w-4 h-4 text-slate-600 dark:text-slate-400" />
+                      <span className="text-sm font-bold text-slate-700 dark:text-slate-300">
+                        {currentDate.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' })}
+                      </span>
+                    </button>
+                    <input
+                      ref={dateInputRef}
+                      type="date"
+                      value={dateInputValue}
+                      onChange={handleDateInputChange}
+                      className="sr-only"
+                      aria-hidden="true"
+                    />
+                  </div>
               </div>
               <div className="flex gap-3">
-                  <button onClick={() => setCurrentDate(new Date(currentDate.setDate(currentDate.getDate() - 1)))} className="p-3 bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm hover:scale-105 transition-transform"><ChevronLeft className="w-6 h-6"/></button>
-                  <button onClick={() => setCurrentDate(new Date(currentDate.setDate(currentDate.getDate() + 1)))} className="p-3 bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm hover:scale-105 transition-transform"><ChevronRight className="w-6 h-6"/></button>
+                  <button onClick={handlePreviousDay} className="p-3 bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm hover:scale-105 transition-transform"><ChevronLeft className="w-6 h-6"/></button>
+                  <button onClick={handleNextDay} className="p-3 bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm hover:scale-105 transition-transform"><ChevronRight className="w-6 h-6"/></button>
               </div>
           </div>
           
@@ -459,19 +536,25 @@ const CalendarTab: React.FC = () => {
   const renderWeekView = () => {
     const startOfWeek = new Date(currentDate);
     startOfWeek.setDate(currentDate.getDate() - currentDate.getDay());
-    const weekDays = Array.from({ length: 7 }, (_, i) => { const d = new Date(startOfWeek); d.setDate(startOfWeek.getDate() + i); return d; });
+    const weekDays = Array.from({ length: 7 }, (_, i) => { 
+      const d = new Date(startOfWeek); 
+      d.setDate(startOfWeek.getDate() + i); 
+      return createLocalDate(d.getFullYear(), d.getMonth(), d.getDate());
+    });
     
     const handlePreviousWeek = () => {
       const newDate = new Date(currentDate);
       newDate.setDate(newDate.getDate() - 7);
-      setCurrentDate(newDate);
+      handleDateSelect(newDate);
     };
 
     const handleNextWeek = () => {
       const newDate = new Date(currentDate);
       newDate.setDate(newDate.getDate() + 7);
-      setCurrentDate(newDate);
+      handleDateSelect(newDate);
     };
+
+    const dateInputValue = `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, '0')}-${String(currentDate.getDate()).padStart(2, '0')}`;
     
     return (
       <div className="space-y-4">
@@ -485,10 +568,41 @@ const CalendarTab: React.FC = () => {
             <ChevronLeft className="w-5 h-5 text-slate-600 dark:text-slate-400" />
           </button>
           
-          <div className="text-center">
-            <p className="text-sm font-black text-slate-600 dark:text-slate-400 uppercase tracking-wider">
-              {startOfWeek.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })} - {weekDays[6].toLocaleDateString('pt-BR', { day: '2-digit', month: 'short', year: 'numeric' })}
-            </p>
+          <div className="flex items-center gap-4">
+            <div className="text-center">
+              <p className="text-sm font-black text-slate-600 dark:text-slate-400 uppercase tracking-wider">
+                {startOfWeek.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })} - {weekDays[6].toLocaleDateString('pt-BR', { day: '2-digit', month: 'short', year: 'numeric' })}
+              </p>
+            </div>
+            {/* Seletor de Data */}
+            <div className="relative">
+              <button
+                onClick={() => {
+                  if (dateInputRef.current) {
+                    try {
+                      (dateInputRef.current as any).showPicker();
+                    } catch (e) {
+                      dateInputRef.current.focus();
+                      dateInputRef.current.click();
+                    }
+                  }
+                }}
+                className="flex items-center gap-2 px-4 py-2 bg-slate-100 dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm hover:border-indigo-500 transition-colors"
+              >
+                <CalendarIcon className="w-4 h-4 text-slate-600 dark:text-slate-400" />
+                <span className="text-sm font-bold text-slate-700 dark:text-slate-300">
+                  {currentDate.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' })}
+                </span>
+              </button>
+              <input
+                ref={dateInputRef}
+                type="date"
+                value={dateInputValue}
+                onChange={handleDateInputChange}
+                className="sr-only"
+                aria-hidden="true"
+              />
+            </div>
           </div>
           
           <button
@@ -502,8 +616,12 @@ const CalendarTab: React.FC = () => {
         
         <div className="grid grid-cols-1 md:grid-cols-7 gap-4 animate-in fade-in slide-in-from-bottom-4 duration-500">
         {weekDays.map(day => {
-          const dayAppts = Array.isArray(appointments) ? appointments.filter(a => new Date(a.startTime).toDateString() === day.toDateString()) : [];
-          const isToday = day.toDateString() === new Date().toDateString();
+          const dayAppts = Array.isArray(appointments) ? appointments.filter(a => {
+            const apptDate = new Date(a.startTime);
+            return isSameDate(apptDate, day);
+          }) : [];
+          const today = new Date();
+          const isToday = isSameDate(day, today);
           return (
             <div key={day.toISOString()} className={`bg-white dark:bg-slate-900 rounded-[2.5rem] border ${isToday ? 'border-indigo-500 shadow-xl ring-4 ring-indigo-500/10' : 'border-slate-200 dark:border-slate-800'} overflow-hidden flex flex-col min-h-[500px]`}>
               <div className={`p-6 text-center border-b ${isToday ? 'bg-gradient-to-br from-indigo-600 to-purple-600 text-white' : 'bg-slate-50 dark:bg-slate-950 text-slate-500'}`}>
@@ -553,21 +671,24 @@ const CalendarTab: React.FC = () => {
   const renderMonthView = () => {
     const year = currentDate.getFullYear(); const month = currentDate.getMonth();
     const firstDay = new Date(year, month, 1).getDay(); const daysInMonth = new Date(year, month + 1, 0).getDate();
-    const days = []; for (let i = 0; i < firstDay; i++) days.push(null); for (let i = 1; i <= daysInMonth; i++) days.push(new Date(year, month, i));
+    const days = []; 
+    for (let i = 0; i < firstDay; i++) days.push(null); 
+    for (let i = 1; i <= daysInMonth; i++) days.push(createLocalDate(year, month, i));
     
     const handlePreviousMonth = () => {
       const newDate = new Date(currentDate);
       newDate.setMonth(newDate.getMonth() - 1);
-      setCurrentDate(newDate);
+      handleDateSelect(newDate);
     };
 
     const handleNextMonth = () => {
       const newDate = new Date(currentDate);
       newDate.setMonth(newDate.getMonth() + 1);
-      setCurrentDate(newDate);
+      handleDateSelect(newDate);
     };
 
     const monthNames = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
+    const dateInputValue = `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, '0')}-${String(currentDate.getDate()).padStart(2, '0')}`;
     
     return (
       <div className="bg-white dark:bg-slate-900 rounded-[3.5rem] border border-slate-200 dark:border-slate-800 overflow-hidden shadow-xl animate-in fade-in zoom-in-95 duration-500">
@@ -581,10 +702,41 @@ const CalendarTab: React.FC = () => {
             <ChevronLeft className="w-6 h-6 text-slate-600 dark:text-slate-400" />
           </button>
           
-          <div className="text-center">
-            <h3 className="text-2xl font-black text-slate-900 dark:text-white uppercase italic tracking-tighter">
-              {monthNames[month]} {year}
-            </h3>
+          <div className="flex items-center gap-4">
+            <div className="text-center">
+              <h3 className="text-2xl font-black text-slate-900 dark:text-white uppercase italic tracking-tighter">
+                {monthNames[month]} {year}
+              </h3>
+            </div>
+            {/* Seletor de Data */}
+            <div className="relative">
+              <button
+                onClick={() => {
+                  if (dateInputRef.current) {
+                    try {
+                      (dateInputRef.current as any).showPicker();
+                    } catch (e) {
+                      dateInputRef.current.focus();
+                      dateInputRef.current.click();
+                    }
+                  }
+                }}
+                className="flex items-center gap-2 px-4 py-2 bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm hover:border-indigo-500 transition-colors"
+              >
+                <CalendarIcon className="w-4 h-4 text-slate-600 dark:text-slate-400" />
+                <span className="text-sm font-bold text-slate-700 dark:text-slate-300">
+                  {currentDate.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' })}
+                </span>
+              </button>
+              <input
+                ref={dateInputRef}
+                type="date"
+                value={dateInputValue}
+                onChange={handleDateInputChange}
+                className="sr-only"
+                aria-hidden="true"
+              />
+            </div>
           </div>
           
           <button
@@ -604,8 +756,12 @@ const CalendarTab: React.FC = () => {
         <div className="grid grid-cols-7 auto-rows-[140px] md:auto-rows-[180px]">
           {days.map((day, idx) => {
             if (!day) return <div key={`empty-${idx}`} className="bg-slate-50/30 dark:bg-slate-950/30 border-r border-b border-slate-50 dark:border-slate-800/50"></div>;
-            const dayAppts = Array.isArray(appointments) ? appointments.filter(a => new Date(a.startTime).toDateString() === day.toDateString()) : [];
-            const isToday = day.toDateString() === new Date().toDateString();
+            const dayAppts = Array.isArray(appointments) ? appointments.filter(a => {
+              const apptDate = new Date(a.startTime);
+              return isSameDate(apptDate, day);
+            }) : [];
+            const today = new Date();
+            const isToday = isSameDate(day, today);
             
             // Agrupar por tipo de procedimento para mostrar cores
             const procedureGroups = dayAppts.reduce((acc, appt) => {
@@ -625,12 +781,12 @@ const CalendarTab: React.FC = () => {
                     return;
                   }
                   // Caso contrário, abrir modal para novo agendamento neste dia
-                  setCurrentDate(day);
+                  handleDateSelect(day);
                   openModal(undefined, day, 9);
                 }}
                 onDoubleClick={() => {
                   // Duplo clique muda para visualização de dia
-                  setCurrentDate(day);
+                  handleDateSelect(day);
                   setView('day');
                 }}
                 className={`p-4 border-r border-b border-slate-50 dark:border-slate-800/50 group hover:bg-indigo-50/30 dark:hover:bg-indigo-900/5 transition-all cursor-pointer relative ${isToday ? 'bg-gradient-to-br from-indigo-50/50 to-purple-50/50 dark:from-indigo-900/10 dark:to-purple-900/10 ring-2 ring-indigo-500/20 ring-inset' : ''}`}
@@ -674,52 +830,18 @@ const CalendarTab: React.FC = () => {
     );
   };
 
-  const isCurrentDateToday = currentDate.toDateString() === new Date().toDateString();
+  const today = new Date();
+  const isCurrentDateToday = isSameDate(currentDate, today);
 
   const goToToday = () => {
-    setCurrentDate(new Date());
+    handleDateSelect(new Date());
   };
 
   return (
     <div className="space-y-8 pb-32 animate-in fade-in duration-500">
       <div className="flex flex-col gap-6">
-          {/* Primeira linha: Data + Status "Você está em Hoje" */}
+          {/* Primeira linha: Status "Você está em Hoje" */}
           <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 w-full">
-            <div className="relative flex-1 sm:flex-none">
-              <button 
-                onClick={() => {
-                  if (dateInputRef.current) {
-                    try {
-                      (dateInputRef.current as any).showPicker();
-                    } catch (e) {
-                      dateInputRef.current.focus();
-                      dateInputRef.current.click();
-                    }
-                  }
-                }} 
-                className="group flex items-center gap-6 bg-white dark:bg-slate-900 px-10 py-6 rounded-[3rem] border border-slate-200 dark:border-slate-800 shadow-sm hover:ring-8 hover:ring-indigo-500/5 transition-all w-full"
-              >
-                <div className="p-4 bg-gradient-to-br from-indigo-600 to-purple-600 text-white rounded-2xl shadow-2xl shadow-indigo-500/30"><CalendarIcon className="w-8 h-8" /></div>
-                <div className="text-left flex-1">
-                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.3em] mb-2">Data Ativa</p>
-                    <h2 className="text-3xl font-black text-slate-900 dark:text-white tracking-tighter uppercase italic">{currentDate.toLocaleDateString('pt-BR', { day: '2-digit', month: 'long' })}</h2>
-                </div>
-              </button>
-              <input
-                ref={dateInputRef}
-                type="date"
-                value={`${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, '0')}-${String(currentDate.getDate()).padStart(2, '0')}`}
-                onChange={(e) => {
-                  const newDate = new Date(e.target.value);
-                  if (!isNaN(newDate.getTime())) {
-                    setCurrentDate(newDate);
-                  }
-                }}
-                className="sr-only"
-                aria-hidden="true"
-              />
-            </div>
-            
             {/* Botão IR PARA HOJE - Destacado */}
             {!isCurrentDateToday && (
               <button 
@@ -855,4 +977,5 @@ const CalendarTab: React.FC = () => {
   );
 };
 
+export default CalendarTab;
 export default CalendarTab;
