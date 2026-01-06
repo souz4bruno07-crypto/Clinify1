@@ -3,9 +3,15 @@ FROM node:18-alpine AS builder
 
 WORKDIR /app
 
+# Instalar dependências de build necessárias
+RUN apk add --no-cache python3 make g++
+
 # Copiar arquivos de dependências
 COPY package*.json ./
 COPY prisma ./prisma/
+
+# Definir DATABASE_URL temporária para Prisma generate (não precisa ser válida)
+ENV DATABASE_URL="postgresql://user:password@localhost:5432/db?schema=public"
 
 # Instalar dependências
 RUN npm ci
