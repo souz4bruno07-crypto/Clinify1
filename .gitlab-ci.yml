@@ -49,16 +49,16 @@ build:backend:
     - cd backend
     - echo "=== DEBUG: Verificando antes do npm ci ==="
     - pwd
-    - ls -la node_modules/.bin/ 2>&1 || echo "node_modules/.bin não existe ainda"
+    - ls -la node_modules/.bin/ 2>&1 || echo "node_modules/.bin nao existe ainda"
     - echo "=== Executando npm ci ==="
     - npm ci
-    - echo "=== DEBUG: Verificando após npm ci ==="
+    - echo "=== DEBUG: Verificando apos npm ci ==="
     - pwd
     - ls -la node_modules/.bin/ | head -20 || echo "Erro ao listar node_modules/.bin"
-    - test -f ./node_modules/.bin/tsc && echo "✅ tsc encontrado em ./node_modules/.bin/tsc" || echo "❌ tsc NÃO encontrado em ./node_modules/.bin/tsc"
-    - test -f node_modules/.bin/tsc && echo "✅ tsc encontrado em node_modules/.bin/tsc" || echo "❌ tsc NÃO encontrado em node_modules/.bin/tsc"
-    - which tsc || echo "tsc não está no PATH"
-    - npm list typescript || echo "typescript não encontrado no npm list"
+    - test -f ./node_modules/.bin/tsc && echo "OK: tsc encontrado em ./node_modules/.bin/tsc" || echo "ERRO: tsc NAO encontrado em ./node_modules/.bin/tsc"
+    - test -f node_modules/.bin/tsc && echo "OK: tsc encontrado em node_modules/.bin/tsc" || echo "ERRO: tsc NAO encontrado em node_modules/.bin/tsc"
+    - which tsc || echo "tsc nao esta no PATH"
+    - npm list typescript || echo "typescript nao encontrado no npm list"
     - echo "PATH: $PATH"
     - echo "=== Fim do DEBUG ==="
   script:
