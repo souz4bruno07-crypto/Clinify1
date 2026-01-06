@@ -16,6 +16,9 @@ ENV DATABASE_URL="postgresql://user:password@localhost:5432/db?schema=public"
 # Instalar dependências (ignorar scripts para evitar problemas no postinstall)
 RUN npm ci --ignore-scripts
 
+# Garantir que typescript e tipos estejam instalados
+RUN npm install typescript @types/express @types/cors @types/bcryptjs @types/jsonwebtoken @types/swagger-jsdoc @types/swagger-ui-express --save-dev || true
+
 # Copiar código fonte
 COPY . .
 
