@@ -10,7 +10,6 @@ import {
   Sparkles, Home, ShieldCheck,
   Sun, Moon, Command, Search, Stethoscope, Package, Trophy, Activity, Gift, Loader2
 } from 'lucide-react';
-import DateSelector from './ui/DateSelector';
 
 // Lazy loading de componentes pesados
 const HomeTab = lazy(() => import('./dashboard/HomeTab'));
@@ -399,11 +398,6 @@ const DashboardScreen: React.FC = () => {
                 </kbd>
               </button>
 
-              {/* Date Selector - Disponível em todas as abas */}
-              <DateSelector
-                selectedDate={currentDate}
-                onDateChange={setCurrentDate}
-              />
 
               {/* Theme Toggle */}
               <button 
@@ -449,7 +443,8 @@ const DashboardScreen: React.FC = () => {
                 user={user} 
                 transactions={transactions} 
                 onOpenTransactionModal={() => handleOpenTransactionModal()} 
-                startDate={currentDate} 
+                startDate={currentDate}
+                setCurrentDate={setCurrentDate}
                 target={{ planned_revenue: monthlyGoal, planned_purchases: monthlyBudget }} 
                 setMonthlyGoal={handleUpdateTargets} 
               />

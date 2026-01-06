@@ -17,6 +17,7 @@ import CategoriesTab from './CategoriesTab';
 import { formatCurrencyValue, parseCurrencyInput } from '../../../utils/formatters';
 import { useToast } from '../../../contexts/ToastContext';
 import { useConfirmDialog } from '../../ui/ConfirmDialog';
+import CalendarDateSelector from '../../ui/CalendarDateSelector';
 
 interface FinanceMainProps {
   transactions: any[];
@@ -45,29 +46,12 @@ const FinanceMain: React.FC<FinanceMainProps> = (props) => {
   const [localGoal, setLocalGoal] = useState('');
   const [localBudget, setLocalBudget] = useState('');
   
-  const dateInputRef = useRef<HTMLInputElement>(null);
-
   useEffect(() => {
     if (isTargetModalOpen) {
       setLocalGoal(formatCurrencyValue(props.monthlyGoal));
       setLocalBudget(formatCurrencyValue(props.monthlyBudget));
     }
   }, [isTargetModalOpen, props.monthlyGoal, props.monthlyBudget]);
-
-  const handleDateClick = () => {
-    if (dateInputRef.current) {
-      try {
-        (dateInputRef.current as any).showPicker();
-      } catch (e) {
-        dateInputRef.current.focus();
-        dateInputRef.current.click();
-      }
-    }
-  };
-
-  const handleGoToday = () => {
-    props.setCurrentDate(new Date());
-  };
 
   const monthlyTransactions = useMemo(() => {
     const year = props.startDate.getFullYear();
@@ -98,54 +82,21 @@ const FinanceMain: React.FC<FinanceMainProps> = (props) => {
   return (
     <div className="space-y-4 animate-in fade-in duration-500">
       
-      {/* HEADER COMPACTO */}
-      <div className="flex flex-col md:flex-row items-center justify-between gap-3">
-          <div className="flex items-center gap-2 w-full md:w-auto">
-              <div className="relative group flex-1 md:flex-none">
-                  <button 
-                    onClick={handleDateClick}
-                    className="flex items-center gap-3 bg-white dark:bg-slate-900 px-5 py-3 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm hover:border-emerald-500/30 transition-all active:scale-95 w-full md:min-w-[240px]"
-                  >
-                      <div className="p-2 bg-emerald-50 dark:bg-emerald-900/20 rounded-lg">
-                        <CalendarLucide className="w-4 h-4 text-emerald-600" />
-                      </div>
-                      <div className="text-left flex-1">
-                          <p className="text-[7px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1">Corte Temporal</p>
-                          <h3 className="text-[11px] font-black text-slate-800 dark:text-slate-100 uppercase tracking-wider italic leading-none">
-                            {props.startDate.toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' })}
-                          </h3>
-                      </div>
-                      <ChevronDown className="w-3 h-3 text-slate-300 group-hover:text-emerald-500 transition-colors" />
-                  </button>
-
-                  <input 
-                    ref={dateInputRef}
-                    type="date"
-                    className="absolute inset-0 opacity-0 pointer-events-none"
-                    value={props.startDate.toISOString().split('T')[0]}
-                    onChange={(e) => {
-                      if(e.target.value) {
-                        props.setCurrentDate(new Date(e.target.value + 'T12:00:00'));
-                      }
-                    }}
-                  />
-              </div>
-
-              <button 
-                onClick={handleGoToday}
-                className="p-3.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-sm text-slate-400 hover:text-emerald-600 transition-all active:scale-90"
-                title="Hoje"
-              >
-                <RefreshCcw className="w-4 h-4" />
-              </button>
-          </div>
-
+      {/* HEADER COM SELETOR DE DATA */}
+      <div className="flex flex-col gap-4">
+        <CalendarDateSelector
+          selectedDate={props.startDate}
+          onDateChange={props.setCurrentDate}
+        />
+        
+        <div className="flex justify-end">
           <button 
               onClick={() => setIsTargetModalOpen(true)}
-              className="flex items-center gap-2.5 px-6 py-3.5 bg-indigo-600 text-white rounded-2xl font-black text-[10px] uppercase tracking-[0.2em] hover:bg-indigo-700 shadow-lg shadow-indigo-500/20 active:scale-95 transition-all w-full md:w-auto justify-center"
+              className="flex items-center gap-2.5 px-6 py-3.5 bg-indigo-600 text-white rounded-2xl font-black text-[10px] uppercase tracking-[0.2em] hover:bg-indigo-700 shadow-lg shadow-indigo-500/20 active:scale-95 transition-all"
           >
               <Target className="w-4 h-4" /> Definir Planejamento
           </button>
+        </div>
       </div>
 
       {/* SUB-MENU TIPO PILLS MAIS FINO */}

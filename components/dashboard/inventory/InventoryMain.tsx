@@ -10,6 +10,7 @@ import ProcedureLinksTab from './ProcedureLinksTab';
 import AlertsPanel from './AlertsPanel';
 import { getAlerts } from '../../../services/inventoryService';
 import { StockAlert } from '../../../types';
+import CalendarDateSelector from '../../ui/CalendarDateSelector';
 
 type InventorySubTab = 'products' | 'movements' | 'reports' | 'procedures';
 
@@ -54,6 +55,12 @@ const InventoryMain: React.FC<InventoryMainProps> = ({ userId, selectedDate, onD
 
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
+      {/* Seletor de Data */}
+      <CalendarDateSelector
+        selectedDate={selectedDate}
+        onDateChange={onDateChange}
+      />
+      
       {/* Header */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>

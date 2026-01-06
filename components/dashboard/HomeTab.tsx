@@ -21,17 +21,19 @@ import { formatCurrency } from '../../utils/formatters';
 import AnimatedNumber from '../ui/AnimatedNumber';
 import { SkeletonAppointmentCards } from '../ui/Skeleton';
 import EmptyState from '../ui/EmptyState';
+import CalendarDateSelector from '../ui/CalendarDateSelector';
 
 interface HomeTabProps {
   user: UserType | null;
   transactions: Transaction[];
   onOpenTransactionModal: () => void;
   startDate: Date;
+  setCurrentDate?: (date: Date) => void;
   target: { planned_revenue: number; planned_purchases: number } | null;
   setMonthlyGoal: (goal: number, budget: number) => Promise<void>;
 }
 
-const HomeTab: React.FC<HomeTabProps> = ({ user, transactions, onOpenTransactionModal, startDate, target, setMonthlyGoal }) => {
+const HomeTab: React.FC<HomeTabProps> = ({ user, transactions, onOpenTransactionModal, startDate, setCurrentDate, target, setMonthlyGoal }) => {
   const navigate = useNavigate();
   const [todayAppointments, setTodayAppointments] = useState<Appointment[]>([]);
   const [leads, setLeads] = useState<ChatContact[]>([]);
@@ -250,6 +252,14 @@ const HomeTab: React.FC<HomeTabProps> = ({ user, transactions, onOpenTransaction
 
   return (
     <div className="space-y-8 animate-in fade-in duration-700 pb-4">
+      {/* SELETOR DE DATA */}
+      {setCurrentDate && (
+        <CalendarDateSelector
+          selectedDate={startDate}
+          onDateChange={setCurrentDate}
+        />
+      )}
+      
       {/* BOAS-VINDAS PERSONALIZADAS */}
       <div className="px-2">
         <div className="flex items-center justify-between mb-4">
