@@ -1,127 +1,182 @@
 // Cliente HTTP para comunicação com o backend
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
 
-const TOKEN_KEY = 'clinify_token';
+const ACCESS_TOKEN_KEY = 'clinify_access_token';
+const REFRESH_TOKEN_KEY = 'clinify_refresh_token';
 const STORAGE_TYPE_KEY = 'clinify_storage_type';
 
 class ApiClient {
-  private token: string | null = null;
+  private accessToken: string | null = null;
+  private refreshToken: string | null = null;
+  private isRefreshing = false;
+  private refreshPromise: Promise<string> | null = null;
 
   constructor() {
-    // Recuperar token do storage apropriado ao inicializar
-    // Primeiro verifica qual storage foi usado originalmente
+    // Recuperar tokens do storage apropriado ao inicializar
+    // Suporte para migração de token antigo (backward compatibility)
     try {
       const storageType = localStorage.getItem(STORAGE_TYPE_KEY);
+      const storage = storageType === 'session' ? sessionStorage : localStorage;
       
-      if (storageType === 'local') {
-        this.token = localStorage.getItem(TOKEN_KEY);
-      } else if (storageType === 'session') {
-        // No mobile, sessionStorage pode ser limitado, tentar localStorage como fallback
-        this.token = sessionStorage.getItem(TOKEN_KEY) || localStorage.getItem(TOKEN_KEY);
-        if (this.token && !sessionStorage.getItem(TOKEN_KEY)) {
-          // Se encontrou em localStorage mas não em sessionStorage, migrar
-          sessionStorage.setItem(TOKEN_KEY, this.token);
-        }
-      } else {
-        // Fallback para verificar ambos (migração de tokens antigos)
-        // Priorizar localStorage no mobile para persistência
-        this.token = localStorage.getItem(TOKEN_KEY) || sessionStorage.getItem(TOKEN_KEY);
-        if (this.token && localStorage.getItem(TOKEN_KEY)) {
-          // Se encontrou token, salvar o tipo de storage
-          localStorage.setItem(STORAGE_TYPE_KEY, 'local');
+      // Tentar recuperar novos tokens (accessToken e refreshToken)
+      this.accessToken = storage.getItem(ACCESS_TOKEN_KEY);
+      this.refreshToken = storage.getItem(REFRESH_TOKEN_KEY);
+      
+      // Se não encontrou novos tokens, tentar migrar do token antigo
+      if (!this.accessToken) {
+        const oldToken = storage.getItem('clinify_token') || localStorage.getItem('clinify_token') || sessionStorage.getItem('clinify_token');
+        if (oldToken) {
+          // Migrar token antigo para accessToken (compatibilidade)
+          this.accessToken = oldToken;
+          storage.setItem(ACCESS_TOKEN_KEY, oldToken);
+          // Limpar token antigo
+          try {
+            localStorage.removeItem('clinify_token');
+            sessionStorage.removeItem('clinify_token');
+          } catch (e) {
+            // Ignorar erro
+          }
         }
       }
       
-      if (this.token) {
-        console.log('[apiClient] Token recuperado do storage:', {
-          storageType: storageType || 'fallback',
-          tokenLength: this.token.length
+      if (this.accessToken) {
+        console.log('[apiClient] Tokens recuperados do storage:', {
+          storageType: storageType || 'local',
+          hasAccessToken: !!this.accessToken,
+          hasRefreshToken: !!this.refreshToken
         });
       }
     } catch (error) {
-      console.error('[apiClient] Erro ao recuperar token:', error);
-      // Em caso de erro (ex: storage bloqueado), tentar recuperar do que for possível
+      console.error('[apiClient] Erro ao recuperar tokens:', error);
       try {
-        this.token = localStorage.getItem(TOKEN_KEY) || sessionStorage.getItem(TOKEN_KEY) || null;
+        this.accessToken = localStorage.getItem(ACCESS_TOKEN_KEY) || sessionStorage.getItem(ACCESS_TOKEN_KEY) || null;
+        this.refreshToken = localStorage.getItem(REFRESH_TOKEN_KEY) || sessionStorage.getItem(REFRESH_TOKEN_KEY) || null;
       } catch (e) {
-        this.token = null;
+        this.accessToken = null;
+        this.refreshToken = null;
       }
     }
   }
 
-  setToken(token: string | null, rememberMe: boolean = true) {
-    this.token = token;
+  setTokens(accessToken: string | null, refreshToken: string | null, rememberMe: boolean = true) {
+    this.accessToken = accessToken;
+    this.refreshToken = refreshToken;
     
     try {
-      if (token) {
-        // No mobile, sempre usar localStorage por padrão para melhor persistência
-        // sessionStorage pode ser limpo mais facilmente em alguns navegadores mobile
-        const shouldUseLocalStorage = rememberMe || /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
-        
-        if (shouldUseLocalStorage) {
-          // Persistir usando localStorage (mais confiável no mobile)
+      const shouldUseLocalStorage = rememberMe || /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+      const storage = shouldUseLocalStorage ? localStorage : sessionStorage;
+      
+      if (accessToken && refreshToken) {
+        try {
+          storage.setItem(ACCESS_TOKEN_KEY, accessToken);
+          storage.setItem(REFRESH_TOKEN_KEY, refreshToken);
+          storage.setItem(STORAGE_TYPE_KEY, shouldUseLocalStorage ? 'local' : 'session');
+          
+          // Limpar tokens antigos e do outro storage
+          const otherStorage = shouldUseLocalStorage ? sessionStorage : localStorage;
           try {
-            localStorage.setItem(TOKEN_KEY, token);
-            localStorage.setItem(STORAGE_TYPE_KEY, 'local');
-            // Limpar sessionStorage caso exista token antigo
-            try {
-              sessionStorage.removeItem(TOKEN_KEY);
-            } catch (e) {
-              // Ignorar erro ao limpar sessionStorage
-            }
+            otherStorage.removeItem(ACCESS_TOKEN_KEY);
+            otherStorage.removeItem(REFRESH_TOKEN_KEY);
+            otherStorage.removeItem('clinify_token'); // Limpar token antigo
           } catch (e) {
-            // Se localStorage falhar, tentar sessionStorage
-            console.warn('[apiClient] localStorage falhou, usando sessionStorage:', e);
-            try {
-              sessionStorage.setItem(TOKEN_KEY, token);
-              localStorage.setItem(STORAGE_TYPE_KEY, 'session');
-            } catch (e2) {
-              console.error('[apiClient] Erro ao salvar token em ambos storages:', e2);
-            }
+            // Ignorar erro
           }
-        } else {
-          // Usar sessionStorage apenas se explicitamente solicitado E não for mobile
+        } catch (e) {
+          // Se storage principal falhar, tentar o outro
+          const fallbackStorage = shouldUseLocalStorage ? sessionStorage : localStorage;
           try {
-            sessionStorage.setItem(TOKEN_KEY, token);
-            localStorage.setItem(STORAGE_TYPE_KEY, 'session');
-            // Limpar localStorage caso exista token antigo
-            try {
-              localStorage.removeItem(TOKEN_KEY);
-            } catch (e) {
-              // Ignorar erro ao limpar localStorage
-            }
-          } catch (e) {
-            // Se sessionStorage falhar, usar localStorage
-            console.warn('[apiClient] sessionStorage falhou, usando localStorage:', e);
-            try {
-              localStorage.setItem(TOKEN_KEY, token);
-              localStorage.setItem(STORAGE_TYPE_KEY, 'local');
-            } catch (e2) {
-              console.error('[apiClient] Erro ao salvar token:', e2);
-            }
+            fallbackStorage.setItem(ACCESS_TOKEN_KEY, accessToken);
+            fallbackStorage.setItem(REFRESH_TOKEN_KEY, refreshToken);
+            fallbackStorage.setItem(STORAGE_TYPE_KEY, shouldUseLocalStorage ? 'session' : 'local');
+          } catch (e2) {
+            console.error('[apiClient] Erro ao salvar tokens:', e2);
           }
         }
       } else {
-        // Limpar ambos os storages
+        // Limpar todos os tokens
         try {
-          localStorage.removeItem(TOKEN_KEY);
+          localStorage.removeItem(ACCESS_TOKEN_KEY);
+          localStorage.removeItem(REFRESH_TOKEN_KEY);
           localStorage.removeItem(STORAGE_TYPE_KEY);
+          localStorage.removeItem('clinify_token'); // Limpar token antigo
         } catch (e) {
           // Ignorar erro
         }
         try {
-          sessionStorage.removeItem(TOKEN_KEY);
+          sessionStorage.removeItem(ACCESS_TOKEN_KEY);
+          sessionStorage.removeItem(REFRESH_TOKEN_KEY);
+          sessionStorage.removeItem('clinify_token'); // Limpar token antigo
         } catch (e) {
           // Ignorar erro
         }
       }
     } catch (error) {
-      console.error('[apiClient] Erro ao salvar token:', error);
+      console.error('[apiClient] Erro ao salvar tokens:', error);
     }
   }
 
+  // Método para compatibilidade (aceita token antigo ou accessToken)
+  setToken(token: string | null, rememberMe: boolean = true) {
+    // Se receber apenas um token, tratar como accessToken (compatibilidade)
+    this.setTokens(token, this.refreshToken, rememberMe);
+  }
+
   getToken() {
-    return this.token;
+    return this.accessToken;
+  }
+
+  getAccessToken() {
+    return this.accessToken;
+  }
+
+  getRefreshToken() {
+    return this.refreshToken;
+  }
+
+  /**
+   * Renova o access token usando o refresh token
+   */
+  async refreshAccessToken(): Promise<string> {
+    // Se já está renovando, retornar a promise existente
+    if (this.isRefreshing && this.refreshPromise) {
+      return this.refreshPromise;
+    }
+
+    if (!this.refreshToken) {
+      throw new Error('No refresh token available');
+    }
+
+    this.isRefreshing = true;
+    this.refreshPromise = (async () => {
+      try {
+        const response = await fetch(`${API_URL}/auth/refresh`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ refreshToken: this.refreshToken }),
+        });
+
+        if (!response.ok) {
+          // Refresh token expirado ou inválido
+          this.setTokens(null, null);
+          throw new Error('Refresh token expired');
+        }
+
+        const data = await response.json();
+        this.setTokens(data.accessToken, data.refreshToken);
+        
+        return data.accessToken;
+      } catch (error) {
+        this.setTokens(null, null);
+        throw error;
+      } finally {
+        this.isRefreshing = false;
+        this.refreshPromise = null;
+      }
+    })();
+
+    return this.refreshPromise;
   }
   
   // Método para verificar o tipo de storage atual
@@ -141,8 +196,8 @@ class ApiClient {
       ...options.headers,
     };
 
-    if (this.token) {
-      (headers as Record<string, string>)['Authorization'] = `Bearer ${this.token}`;
+    if (this.accessToken) {
+      (headers as Record<string, string>)['Authorization'] = `Bearer ${this.accessToken}`;
     }
 
     // Log apenas em desenvolvimento
@@ -169,6 +224,45 @@ class ApiClient {
       }
 
       if (!response.ok) {
+        // Se for 401 (não autorizado), tentar renovar o token
+        if (response.status === 401 && this.refreshToken && endpoint !== '/auth/refresh') {
+          try {
+            const newAccessToken = await this.refreshAccessToken();
+            // Tentar novamente com o novo token
+            (headers as Record<string, string>)['Authorization'] = `Bearer ${newAccessToken}`;
+            const retryResponse = await fetch(url, {
+              ...options,
+              headers,
+              signal: controller.signal,
+            });
+            clearTimeout(timeoutId);
+            
+            if (!retryResponse.ok) {
+              // Se ainda falhar após refresh, lançar erro
+              const errorText = await retryResponse.text();
+              const errorData = errorText ? JSON.parse(errorText) : { error: `HTTP error! status: ${retryResponse.status}` };
+              const error = new Error(errorData.error || errorData.details || errorData.message || `HTTP error! status: ${retryResponse.status}`);
+              (error as any).status = retryResponse.status;
+              (error as any).response = { data: errorData };
+              throw error;
+            }
+            
+            // Se sucesso após refresh, processar resposta normalmente
+            const text = await retryResponse.text();
+            if (!text || text.trim() === '') {
+              return {} as T;
+            }
+            return JSON.parse(text);
+          } catch (refreshError: any) {
+            // Se refresh falhar, limpar tokens e lançar erro
+            this.setTokens(null, null);
+            clearTimeout(timeoutId);
+            const error = new Error('Sessão expirada. Por favor, faça login novamente.');
+            (error as any).status = 401;
+            throw error;
+          }
+        }
+        
         let errorData: any;
         try {
           const errorText = await response.text();

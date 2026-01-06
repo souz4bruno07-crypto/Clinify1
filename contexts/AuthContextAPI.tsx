@@ -10,7 +10,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const isMounted = useRef(true);
 
   const cleanLocalSession = useCallback(() => {
-    api.setToken(null); // Isso limpa ambos localStorage e sessionStorage
+    api.setTokens(null, null); // Limpa accessToken e refreshToken
     if (isMounted.current) setUser(null);
   }, []);
 
@@ -42,25 +42,39 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     const initializeAuth = async () => {
       try {
-        // O token já é recuperado automaticamente no apiClient constructor
-        // baseado no tipo de storage usado originalmente
-        const token = api.getToken();
+        // Os tokens já são recuperados automaticamente no apiClient constructor
+        const accessToken = api.getAccessToken();
+        const refreshToken = api.getRefreshToken();
         const storageType = api.getStorageType();
         
         console.log('[AuthContext] Inicializando autenticação...', {
-          hasToken: !!token,
-          storageType: storageType || 'unknown',
-          tokenLength: token?.length || 0
+          hasAccessToken: !!accessToken,
+          hasRefreshToken: !!refreshToken,
+          storageType: storageType || 'unknown'
         });
         
-        if (token) {
+        if (accessToken) {
           try {
             await fetchUserProfile();
           } catch (e: any) {
-            // Não limpar sessão aqui, o fetchUserProfile já trata isso
-            console.error('[AuthContext] Erro ao inicializar perfil:', e);
-            // Se for erro 401, já foi tratado no fetchUserProfile
-            // Para outros erros, manter loading como false para permitir tentativa de uso
+            // Se for 401 e tiver refreshToken, tentar renovar
+            if ((e?.status === 401 || e?.status === 403) && refreshToken) {
+              try {
+                await api.refreshAccessToken();
+                // Tentar buscar perfil novamente
+                await fetchUserProfile();
+              } catch (refreshErr) {
+                // Se refresh falhar, limpar sessão
+                console.log('[AuthContext] Refresh token falhou, limpando sessão');
+                cleanLocalSession();
+              }
+            } else if (e?.status === 401 || e?.status === 403) {
+              // Token inválido e sem refresh token
+              cleanLocalSession();
+            } else {
+              // Outros erros não devem limpar sessão
+              console.error('[AuthContext] Erro ao inicializar perfil:', e);
+            }
           }
         } else {
           console.log('[AuthContext] Nenhum token encontrado');
@@ -84,12 +98,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const signIn = async (email: string, password: string, rememberMe: boolean = false) => {
     try {
-      const response = await api.post<{ user: User; token: string }>('/auth/signin', { email, password });
+      const response = await api.post<{ user: User; accessToken: string; refreshToken: string } | { user: User; token: string }>('/auth/signin', { email, password });
       
-      // Salva o token no storage apropriado baseado em rememberMe
-      // rememberMe = true: localStorage (persiste 30 dias)
-      // rememberMe = false: sessionStorage (expira ao fechar navegador)
-      api.setToken(response.token, rememberMe);
+      // Suporte para resposta antiga (token) e nova (accessToken + refreshToken)
+      if ('accessToken' in response && 'refreshToken' in response) {
+        // Nova resposta com refresh tokens
+        api.setTokens(response.accessToken, response.refreshToken, rememberMe);
+      } else if ('token' in response) {
+        // Resposta antiga (compatibilidade)
+        api.setToken(response.token, rememberMe);
+      }
+      
       setUser(response.user);
       
       return { error: null };
@@ -100,14 +119,22 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const signUp = async (email: string, password: string, clinicName: string, name: string) => {
     try {
-      const response = await api.post<{ user: User; token: string }>('/auth/signup', { 
+      const response = await api.post<{ user: User; accessToken: string; refreshToken: string } | { user: User; token: string }>('/auth/signup', { 
         email, 
         password, 
         name, 
         clinicName 
       });
       
-      api.setToken(response.token);
+      // Suporte para resposta antiga (token) e nova (accessToken + refreshToken)
+      if ('accessToken' in response && 'refreshToken' in response) {
+        // Nova resposta com refresh tokens
+        api.setTokens(response.accessToken, response.refreshToken, true);
+      } else if ('token' in response) {
+        // Resposta antiga (compatibilidade)
+        api.setToken(response.token, true);
+      }
+      
       setUser(response.user);
       
       return { error: null };
@@ -118,6 +145,22 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const signOut = async () => {
     if (isMounted.current) setLoading(true);
+    
+    try {
+      // Tentar revogar tokens no backend
+      const refreshToken = api.getRefreshToken();
+      if (refreshToken) {
+        try {
+          await api.post('/auth/logout', { refreshToken });
+        } catch (err) {
+          // Ignorar erro no logout (pode ser que o token já esteja expirado)
+          console.warn('[AuthContext] Erro ao revogar token no backend:', err);
+        }
+      }
+    } catch (err) {
+      // Ignorar erro
+    }
+    
     cleanLocalSession();
     if (isMounted.current) setLoading(false);
   };
