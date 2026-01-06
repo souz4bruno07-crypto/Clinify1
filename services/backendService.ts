@@ -672,4 +672,77 @@ export const createConsultation = async (
   return api.post(`/medical-records/${patientId}/consultations`, consultation);
 };
 
+// --- EVOLUTION API / WHATSAPP ---
+
+export interface EvolutionConfigResponse {
+  config: {
+    apiUrl: string;
+    instance: string | null;
+  } | null;
+}
+
+export const getEvolutionConfig = async (): Promise<EvolutionConfigResponse> => {
+  return api.get<EvolutionConfigResponse>('/evolution/config');
+};
+
+export const saveEvolutionConfig = async (config: {
+  apiUrl: string;
+  apiKey: string;
+  instance?: string;
+}): Promise<{ success: boolean }> => {
+  return api.post<{ success: boolean }>('/evolution/config', config);
+};
+
+export const listEvolutionInstances = async (): Promise<{ instances: any[] }> => {
+  return api.get<{ instances: any[] }>('/evolution/instances');
+};
+
+export const createEvolutionInstance = async (instanceName: string): Promise<{
+  success: boolean;
+  instanceName: string;
+  qrCode: string | null;
+  message: string;
+  alreadyExists?: boolean;
+}> => {
+  return api.post<{
+    success: boolean;
+    instanceName: string;
+    qrCode: string | null;
+    message: string;
+    alreadyExists?: boolean;
+  }>('/evolution/instance/create', { instanceName });
+};
+
+export const getEvolutionQrCode = async (): Promise<{
+  code: string | null;
+  error?: string;
+  connected?: boolean;
+}> => {
+  return api.get<{
+    code: string | null;
+    error?: string;
+    connected?: boolean;
+  }>('/evolution/qrcode');
+};
+
+export const getEvolutionStatus = async (): Promise<{
+  status: string;
+  message: string;
+}> => {
+  return api.get<{
+    status: string;
+    message: string;
+  }>('/evolution/status');
+};
+
+export const deleteEvolutionInstance = async (): Promise<{
+  success: boolean;
+  message: string;
+}> => {
+  return api.delete<{
+    success: boolean;
+    message: string;
+  }>('/evolution/instance');
+};
+
 

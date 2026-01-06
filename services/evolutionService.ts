@@ -1,5 +1,6 @@
 
 import { ChatMessage, ChatContact } from '../types';
+import * as backendService from './backendService';
 
 export interface EvolutionConfig {
   apiUrl: string;
@@ -8,8 +9,65 @@ export interface EvolutionConfig {
 }
 
 let cachedExactName: string | null = null;
+let backendConfigCache: EvolutionConfig | null = null;
+let backendConfigCacheTime = 0;
+const CACHE_DURATION = 5 * 60 * 1000; // 5 minutos
 
-export const getEvolutionConfig = (): EvolutionConfig | null => {
+// Tenta obter configuração do backend primeiro, depois fallback para localStorage
+export const getEvolutionConfig = async (): Promise<EvolutionConfig | null> => {
+  // Tentar usar backend primeiro (com cache)
+  if (backendConfigCache && Date.now() - backendConfigCacheTime < CACHE_DURATION) {
+    return backendConfigCache;
+  }
+
+  try {
+    const backendConfig = await backendService.getEvolutionConfig();
+    if (backendConfig?.config && backendConfig.config.apiUrl) {
+      // Para usar a config do backend, precisamos da apiKey também
+      // Mas por segurança, não retornamos a apiKey do backend
+      // Então vamos usar localStorage como fallback se não tiver apiKey lá
+      const saved = localStorage.getItem('clinify_evolution_config');
+      if (saved) {
+        try {
+          const localConfig = JSON.parse(saved);
+          if (localConfig.apiKey) {
+            backendConfigCache = {
+              apiUrl: backendConfig.config.apiUrl,
+              apiKey: localConfig.apiKey,
+              instance: backendConfig.config.instance || localConfig.instance || ''
+            };
+            backendConfigCacheTime = Date.now();
+            return backendConfigCache;
+          }
+        } catch (e) {}
+      }
+    }
+  } catch (e) {
+    // Backend não disponível ou erro, usar localStorage
+  }
+
+  // Fallback para localStorage
+  const saved = localStorage.getItem('clinify_evolution_config');
+  if (!saved) return null;
+  try {
+    const config = JSON.parse(saved);
+    let cleanUrl = (config.apiUrl || '').trim()
+      .replace(/\/+$/, '')
+      .replace(/\/manager$/, '')
+      .replace(/\/instance$/, '');
+    
+    return {
+      apiUrl: cleanUrl,
+      instance: (config.instance || '').trim(),
+      apiKey: (config.apiKey || '').trim()
+    };
+  } catch (e) {
+    return null;
+  }
+};
+
+// Versão síncrona para compatibilidade (usa localStorage)
+export const getEvolutionConfigSync = (): EvolutionConfig | null => {
   const saved = localStorage.getItem('clinify_evolution_config');
   if (!saved) return null;
   try {
@@ -48,8 +106,13 @@ const resolveInstanceName = async (config: EvolutionConfig): Promise<string> => 
   return config.instance;
 };
 
+// Função auxiliar para obter config de forma assíncrona
+const getConfigAsync = async (): Promise<EvolutionConfig | null> => {
+  return await getEvolutionConfig();
+};
+
 export const fetchEvolutionChats = async (): Promise<ChatContact[]> => {
-  const config = getEvolutionConfig();
+  const config = await getConfigAsync();
   if (!config?.apiUrl) return [];
   try {
     const instanceName = await resolveInstanceName(config);
@@ -82,7 +145,7 @@ export const fetchEvolutionChats = async (): Promise<ChatContact[]> => {
 };
 
 export const logoutEvolutionInstance = async (): Promise<boolean> => {
-  const config = getEvolutionConfig();
+  const config = await getConfigAsync();
   if (!config) return false;
   try {
     const instanceName = await resolveInstanceName(config);
@@ -97,7 +160,24 @@ export const logoutEvolutionInstance = async (): Promise<boolean> => {
 };
 
 export const getEvolutionQrCode = async (): Promise<{ code: string | null; error?: string }> => {
-  const config = getEvolutionConfig();
+  // Tentar usar backend primeiro
+  try {
+    const result = await backendService.getEvolutionQrCode();
+    if (result.code === 'CONNECTED_ALREADY') {
+      return { code: 'CONNECTED_ALREADY' };
+    }
+    if (result.code) {
+      return { code: result.code };
+    }
+    if (result.error) {
+      return { code: null, error: result.error };
+    }
+  } catch (e) {
+    // Backend não disponível, usar método direto
+  }
+
+  // Fallback para método direto
+  const config = getEvolutionConfigSync();
   if (!config?.apiUrl) return { code: null, error: 'Configuração incompleta.' };
   try {
     const instanceName = await resolveInstanceName(config);
@@ -121,7 +201,16 @@ export const getEvolutionQrCode = async (): Promise<{ code: string | null; error
 };
 
 export const getEvolutionStatus = async (): Promise<string> => {
-  const config = getEvolutionConfig();
+  // Tentar usar backend primeiro
+  try {
+    const result = await backendService.getEvolutionStatus();
+    return result.status;
+  } catch (e) {
+    // Backend não disponível, usar método direto
+  }
+
+  // Fallback para método direto
+  const config = getEvolutionConfigSync();
   if (!config?.apiUrl) return 'disconnected';
   try {
     const instanceName = await resolveInstanceName(config);
@@ -156,7 +245,7 @@ export const getEvolutionStatus = async (): Promise<string> => {
 };
 
 export const fetchEvolutionMessages = async (number: string): Promise<ChatMessage[]> => {
-  const config = getEvolutionConfig();
+  const config = await getConfigAsync();
   if (!config?.apiUrl) return [];
   try {
     const instanceName = await resolveInstanceName(config);
@@ -205,7 +294,7 @@ export const fetchEvolutionMessages = async (number: string): Promise<ChatMessag
 };
 
 export const sendEvolutionMessage = async (number: string, text: string) => {
-  const config = getEvolutionConfig();
+  const config = await getConfigAsync();
   if (!config?.apiUrl) return null;
   try {
     const instanceName = await resolveInstanceName(config);
@@ -252,4 +341,27 @@ export const testEvolutionConnection = async (config: EvolutionConfig): Promise<
   } catch (e: any) {
     return { success: false, message: `Erro de Rede/CORS: ${e.message}` };
   }
+};
+
+// Novas funções para criar instância via backend
+export const createEvolutionInstance = async (instanceName: string): Promise<{
+  success: boolean;
+  instanceName: string;
+  qrCode: string | null;
+  message: string;
+  alreadyExists?: boolean;
+}> => {
+  return backendService.createEvolutionInstance(instanceName);
+};
+
+export const listEvolutionInstances = async (): Promise<{ instances: any[] }> => {
+  return backendService.listEvolutionInstances();
+};
+
+export const saveEvolutionConfigToBackend = async (config: {
+  apiUrl: string;
+  apiKey: string;
+  instance?: string;
+}): Promise<{ success: boolean }> => {
+  return backendService.saveEvolutionConfig(config);
 };

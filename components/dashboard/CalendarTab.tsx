@@ -48,6 +48,7 @@ const CalendarTab: React.FC = () => {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [view, setView] = useState<'month' | 'week' | 'day'>('day');
   const [isDatePickerOpen, setIsDatePickerOpen] = useState(false);
+  const dateInputRef = useRef<HTMLInputElement>(null);
   const [hoveredAppt, setHoveredAppt] = useState<string | null>(null);
   
   const [appointments, setAppointments] = useState<Appointment[]>([]);
@@ -459,8 +460,47 @@ const CalendarTab: React.FC = () => {
     const startOfWeek = new Date(currentDate);
     startOfWeek.setDate(currentDate.getDate() - currentDate.getDay());
     const weekDays = Array.from({ length: 7 }, (_, i) => { const d = new Date(startOfWeek); d.setDate(startOfWeek.getDate() + i); return d; });
+    
+    const handlePreviousWeek = () => {
+      const newDate = new Date(currentDate);
+      newDate.setDate(newDate.getDate() - 7);
+      setCurrentDate(newDate);
+    };
+
+    const handleNextWeek = () => {
+      const newDate = new Date(currentDate);
+      newDate.setDate(newDate.getDate() + 7);
+      setCurrentDate(newDate);
+    };
+    
     return (
-      <div className="grid grid-cols-1 md:grid-cols-7 gap-4 animate-in fade-in slide-in-from-bottom-4 duration-500">
+      <div className="space-y-4">
+        {/* Cabeçalho com navegação de semana */}
+        <div className="bg-white dark:bg-slate-900 rounded-[2.5rem] border border-slate-200 dark:border-slate-800 px-8 py-4 flex items-center justify-between shadow-sm">
+          <button
+            onClick={handlePreviousWeek}
+            className="p-3 bg-slate-100 dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm hover:scale-105 transition-transform hover:border-indigo-500"
+            aria-label="Semana anterior"
+          >
+            <ChevronLeft className="w-5 h-5 text-slate-600 dark:text-slate-400" />
+          </button>
+          
+          <div className="text-center">
+            <p className="text-sm font-black text-slate-600 dark:text-slate-400 uppercase tracking-wider">
+              {startOfWeek.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })} - {weekDays[6].toLocaleDateString('pt-BR', { day: '2-digit', month: 'short', year: 'numeric' })}
+            </p>
+          </div>
+          
+          <button
+            onClick={handleNextWeek}
+            className="p-3 bg-slate-100 dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm hover:scale-105 transition-transform hover:border-indigo-500"
+            aria-label="Próxima semana"
+          >
+            <ChevronRight className="w-5 h-5 text-slate-600 dark:text-slate-400" />
+          </button>
+        </div>
+        
+        <div className="grid grid-cols-1 md:grid-cols-7 gap-4 animate-in fade-in slide-in-from-bottom-4 duration-500">
         {weekDays.map(day => {
           const dayAppts = Array.isArray(appointments) ? appointments.filter(a => new Date(a.startTime).toDateString() === day.toDateString()) : [];
           const isToday = day.toDateString() === new Date().toDateString();
@@ -505,6 +545,7 @@ const CalendarTab: React.FC = () => {
             </div>
           );
         })}
+        </div>
       </div>
     );
   };
@@ -513,8 +554,48 @@ const CalendarTab: React.FC = () => {
     const year = currentDate.getFullYear(); const month = currentDate.getMonth();
     const firstDay = new Date(year, month, 1).getDay(); const daysInMonth = new Date(year, month + 1, 0).getDate();
     const days = []; for (let i = 0; i < firstDay; i++) days.push(null); for (let i = 1; i <= daysInMonth; i++) days.push(new Date(year, month, i));
+    
+    const handlePreviousMonth = () => {
+      const newDate = new Date(currentDate);
+      newDate.setMonth(newDate.getMonth() - 1);
+      setCurrentDate(newDate);
+    };
+
+    const handleNextMonth = () => {
+      const newDate = new Date(currentDate);
+      newDate.setMonth(newDate.getMonth() + 1);
+      setCurrentDate(newDate);
+    };
+
+    const monthNames = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
+    
     return (
       <div className="bg-white dark:bg-slate-900 rounded-[3.5rem] border border-slate-200 dark:border-slate-800 overflow-hidden shadow-xl animate-in fade-in zoom-in-95 duration-500">
+        {/* Cabeçalho com navegação de mês */}
+        <div className="bg-slate-50 dark:bg-slate-950 border-b border-slate-100 dark:border-slate-800 px-8 py-6 flex items-center justify-between">
+          <button
+            onClick={handlePreviousMonth}
+            className="p-3 bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm hover:scale-105 transition-transform hover:border-indigo-500"
+            aria-label="Mês anterior"
+          >
+            <ChevronLeft className="w-6 h-6 text-slate-600 dark:text-slate-400" />
+          </button>
+          
+          <div className="text-center">
+            <h3 className="text-2xl font-black text-slate-900 dark:text-white uppercase italic tracking-tighter">
+              {monthNames[month]} {year}
+            </h3>
+          </div>
+          
+          <button
+            onClick={handleNextMonth}
+            className="p-3 bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm hover:scale-105 transition-transform hover:border-indigo-500"
+            aria-label="Próximo mês"
+          >
+            <ChevronRight className="w-6 h-6 text-slate-600 dark:text-slate-400" />
+          </button>
+        </div>
+        
         <div className="grid grid-cols-7 border-b border-slate-100 dark:border-slate-800">
           {['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'].map(d => (
             <div key={d} className="py-6 text-center text-[10px] font-black uppercase tracking-[0.3em] text-slate-400 bg-slate-50 dark:bg-slate-950 border-r last:border-0 border-slate-100 dark:border-slate-800">{d}</div>
@@ -536,7 +617,24 @@ const CalendarTab: React.FC = () => {
             }, {} as Record<string, { count: number; style: typeof procedureColors['default'] }>);
             
             return (
-              <div key={day.toISOString()} onClick={() => { setCurrentDate(day); setView('day'); }} className={`p-4 border-r border-b border-slate-50 dark:border-slate-800/50 group hover:bg-indigo-50/30 dark:hover:bg-indigo-900/5 transition-all cursor-pointer relative ${isToday ? 'bg-gradient-to-br from-indigo-50/50 to-purple-50/50 dark:from-indigo-900/10 dark:to-purple-900/10 ring-2 ring-indigo-500/20 ring-inset' : ''}`}>
+              <div 
+                key={day.toISOString()} 
+                onClick={(e) => {
+                  // Se clicar em um agendamento, abrir o modal do agendamento
+                  if ((e.target as HTMLElement).closest('.appointment-indicator')) {
+                    return;
+                  }
+                  // Caso contrário, abrir modal para novo agendamento neste dia
+                  setCurrentDate(day);
+                  openModal(undefined, day, 9);
+                }}
+                onDoubleClick={() => {
+                  // Duplo clique muda para visualização de dia
+                  setCurrentDate(day);
+                  setView('day');
+                }}
+                className={`p-4 border-r border-b border-slate-50 dark:border-slate-800/50 group hover:bg-indigo-50/30 dark:hover:bg-indigo-900/5 transition-all cursor-pointer relative ${isToday ? 'bg-gradient-to-br from-indigo-50/50 to-purple-50/50 dark:from-indigo-900/10 dark:to-purple-900/10 ring-2 ring-indigo-500/20 ring-inset' : ''}`}
+              >
                 <div className="flex justify-between items-start mb-2">
                   <span className={`text-sm font-black p-1.5 rounded-lg leading-none ${isToday ? 'bg-gradient-to-br from-indigo-600 to-purple-600 text-white shadow-lg' : 'text-slate-400 group-hover:text-slate-900 dark:group-hover:text-white'}`}>{day.getDate()}</span>
                   {dayAppts.length > 0 && <span className="text-[10px] font-black bg-emerald-500 text-white px-2 py-0.5 rounded-full shadow-sm">{dayAppts.length}</span>}
@@ -546,8 +644,18 @@ const CalendarTab: React.FC = () => {
                 <div className="space-y-1 mt-1">
                   {Object.entries(procedureGroups).slice(0, 3).map(([key, { count, style }]) => {
                     const Icon = style.icon;
+                    const firstAppt = dayAppts.find(a => a.serviceName.toLowerCase().split(' ')[0] === key);
                     return (
-                      <div key={key} className={`flex items-center gap-1.5 px-2 py-1 rounded-lg ${style.bg} opacity-90`}>
+                      <div 
+                        key={key} 
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (firstAppt) {
+                            openModal(firstAppt);
+                          }
+                        }}
+                        className={`appointment-indicator flex items-center gap-1.5 px-2 py-1 rounded-lg ${style.bg} opacity-90 cursor-pointer hover:opacity-100 transition-opacity`}
+                      >
                         <Icon className="w-2.5 h-2.5 text-white" />
                         <span className="text-[8px] font-bold text-white truncate capitalize">{key}</span>
                         {count > 1 && <span className="text-[7px] font-black text-white/70 ml-auto">x{count}</span>}
@@ -577,13 +685,40 @@ const CalendarTab: React.FC = () => {
       <div className="flex flex-col gap-6">
           {/* Primeira linha: Data + Status "Você está em Hoje" */}
           <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 w-full">
-            <button onClick={() => setIsDatePickerOpen(!isDatePickerOpen)} className="group flex items-center gap-6 bg-white dark:bg-slate-900 px-10 py-6 rounded-[3rem] border border-slate-200 dark:border-slate-800 shadow-sm hover:ring-8 hover:ring-indigo-500/5 transition-all flex-1 sm:flex-none">
+            <div className="relative flex-1 sm:flex-none">
+              <button 
+                onClick={() => {
+                  if (dateInputRef.current) {
+                    try {
+                      (dateInputRef.current as any).showPicker();
+                    } catch (e) {
+                      dateInputRef.current.focus();
+                      dateInputRef.current.click();
+                    }
+                  }
+                }} 
+                className="group flex items-center gap-6 bg-white dark:bg-slate-900 px-10 py-6 rounded-[3rem] border border-slate-200 dark:border-slate-800 shadow-sm hover:ring-8 hover:ring-indigo-500/5 transition-all w-full"
+              >
                 <div className="p-4 bg-gradient-to-br from-indigo-600 to-purple-600 text-white rounded-2xl shadow-2xl shadow-indigo-500/30"><CalendarIcon className="w-8 h-8" /></div>
                 <div className="text-left flex-1">
                     <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.3em] mb-2">Data Ativa</p>
                     <h2 className="text-3xl font-black text-slate-900 dark:text-white tracking-tighter uppercase italic">{currentDate.toLocaleDateString('pt-BR', { day: '2-digit', month: 'long' })}</h2>
                 </div>
-            </button>
+              </button>
+              <input
+                ref={dateInputRef}
+                type="date"
+                value={`${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, '0')}-${String(currentDate.getDate()).padStart(2, '0')}`}
+                onChange={(e) => {
+                  const newDate = new Date(e.target.value);
+                  if (!isNaN(newDate.getTime())) {
+                    setCurrentDate(newDate);
+                  }
+                }}
+                className="sr-only"
+                aria-hidden="true"
+              />
+            </div>
             
             {/* Botão IR PARA HOJE - Destacado */}
             {!isCurrentDateToday && (

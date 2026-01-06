@@ -4,13 +4,15 @@ import { ChatContact, ChatMessage, Patient } from '../../types';
 import { getPatients, saveMessageToHistory, getStoredMessages, getChatThreads, updateThreadStage } from '../../services/backendService';
 import { 
   fetchEvolutionMessages, sendEvolutionMessage, getEvolutionStatus, getEvolutionQrCode, 
-  logoutEvolutionInstance, fetchEvolutionChats
+  logoutEvolutionInstance, fetchEvolutionChats, createEvolutionInstance, 
+  saveEvolutionConfigToBackend, listEvolutionInstances
 } from '../../services/evolutionService';
 import { 
   Search, Send, Smartphone, Wifi, WifiOff, Loader2, AlertCircle, Trash2,
   UserCheck, History, X, ArrowRight, CheckCheck, LayoutGrid, MessageSquare,
   ChevronRight, Filter, Star, Clock, MoreHorizontal, UserPlus, Zap, TrendingUp,
-  Calendar, FileText, Sparkles, Heart, Gift, Bell, ThumbsUp, HelpCircle, Target
+  Calendar, FileText, Sparkles, Heart, Gift, Bell, ThumbsUp, HelpCircle, Target,
+  QrCode, Settings, Plus
 } from 'lucide-react';
 import { useToast } from '../../contexts/ToastContext';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
@@ -121,6 +123,12 @@ const CRMTab: React.FC<{ user: any }> = ({ user }) => {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const pollingRef = useRef<any>(null);
   const [showTemplates, setShowTemplates] = useState(false);
+  const [showConnectionModal, setShowConnectionModal] = useState(false);
+  const [isCreatingInstance, setIsCreatingInstance] = useState(false);
+  const [instanceName, setInstanceName] = useState('');
+  const [apiUrl, setApiUrl] = useState('');
+  const [apiKey, setApiKey] = useState('');
+  const [needsConfig, setNeedsConfig] = useState(false);
 
   // Métricas de conversão calculadas
   const metrics = useMemo(() => {
@@ -148,13 +156,70 @@ const CRMTab: React.FC<{ user: any }> = ({ user }) => {
     const dbThreads = await getChatThreads(user.id);
     setThreads(dbThreads);
 
+    // Verificar se precisa de configuração
+    if (status === 'offline' || status === 'disconnected') {
+      try {
+        const config = await listEvolutionInstances();
+        if (!config || config.instances.length === 0) {
+          setNeedsConfig(true);
+        }
+      } catch (e) {
+        setNeedsConfig(true);
+      }
+    }
+
     if (status !== 'connected' && viewMode === 'chat') fetchQr();
   };
 
   const fetchQr = async () => {
     const res = await getEvolutionQrCode();
-    if (res.code === 'CONNECTED_ALREADY') setConnectionStatus('connected');
-    else setQrCode(res.code);
+    if (res.code === 'CONNECTED_ALREADY') {
+      setConnectionStatus('connected');
+      setQrCode(null);
+    } else {
+      setQrCode(res.code);
+    }
+  };
+
+  const handleCreateInstance = async () => {
+    if (!instanceName.trim()) {
+      toast.error('Digite um nome para a instância');
+      return;
+    }
+
+    setIsCreatingInstance(true);
+    try {
+      // Se precisa configurar API primeiro
+      if (needsConfig && apiUrl && apiKey) {
+        await saveEvolutionConfigToBackend({
+          apiUrl: apiUrl.trim(),
+          apiKey: apiKey.trim(),
+          instance: instanceName.trim()
+        });
+      }
+
+      const result = await createEvolutionInstance(instanceName.trim());
+      
+      if (result.success) {
+        if (result.qrCode) {
+          setQrCode(result.qrCode);
+          toast.success('Instância criada! Escaneie o QR Code para conectar.');
+        } else if (result.alreadyExists) {
+          toast.success('Instância encontrada. Tentando conectar...');
+          fetchQr();
+        } else {
+          toast.success(result.message);
+          fetchQr();
+        }
+        setNeedsConfig(false);
+      } else {
+        toast.error('Erro ao criar instância');
+      }
+    } catch (error: any) {
+      toast.error(error.message || 'Erro ao criar instância');
+    } finally {
+      setIsCreatingInstance(false);
+    }
   };
 
   useEffect(() => {
@@ -427,6 +492,14 @@ const CRMTab: React.FC<{ user: any }> = ({ user }) => {
               <button onClick={() => setViewMode('pipeline')} className="px-6 py-2.5 bg-slate-900 dark:bg-white text-white dark:text-slate-900 rounded-xl font-black text-[10px] uppercase tracking-widest flex items-center gap-2 hover:scale-[1.02] transition-all shadow-md">
                 <LayoutGrid className="w-3.5 h-3.5" /> Pipeline Oportunidades
               </button>
+              {connectionStatus !== 'connected' && (
+                <button 
+                  onClick={() => setShowConnectionModal(true)}
+                  className="px-6 py-2.5 bg-emerald-600 text-white rounded-xl font-black text-[10px] uppercase tracking-widest flex items-center gap-2 hover:scale-[1.02] transition-all shadow-md"
+                >
+                  <Plus className="w-3.5 h-3.5" /> Conectar WhatsApp
+                </button>
+              )}
               <ConnectionStatus status={connectionStatus} />
           </div>
        </div>
@@ -606,6 +679,132 @@ const CRMTab: React.FC<{ user: any }> = ({ user }) => {
             </div>
           )}
        </div>
+
+       {/* Modal de Conexão WhatsApp */}
+       {showConnectionModal && (
+         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+           <div className="bg-white dark:bg-slate-900 rounded-3xl shadow-2xl max-w-md w-full p-8 animate-in fade-in zoom-in-95">
+             <div className="flex items-center justify-between mb-6">
+               <div className="flex items-center gap-3">
+                 <div className="p-3 bg-indigo-600 rounded-xl text-white">
+                   <QrCode className="w-6 h-6" />
+                 </div>
+                 <div>
+                   <h3 className="text-xl font-black uppercase italic tracking-tighter text-slate-900 dark:text-white">
+                     Conectar WhatsApp
+                   </h3>
+                   <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">
+                     Configure sua instância Evolution
+                   </p>
+                 </div>
+               </div>
+               <button
+                 onClick={() => {
+                   setShowConnectionModal(false);
+                   setNeedsConfig(false);
+                   setApiUrl('');
+                   setApiKey('');
+                   setInstanceName('');
+                 }}
+                 className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-colors"
+               >
+                 <X className="w-5 h-5 text-slate-400" />
+               </button>
+             </div>
+
+             {needsConfig && (
+               <div className="space-y-4 mb-6">
+                 <div>
+                   <label className="block text-xs font-black text-slate-600 dark:text-slate-300 uppercase tracking-wider mb-2">
+                     URL da API Evolution
+                   </label>
+                   <input
+                     type="text"
+                     value={apiUrl}
+                     onChange={(e) => setApiUrl(e.target.value)}
+                     placeholder="https://api.evolution.com"
+                     className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm font-bold focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                   />
+                 </div>
+                 <div>
+                   <label className="block text-xs font-black text-slate-600 dark:text-slate-300 uppercase tracking-wider mb-2">
+                     API Key
+                   </label>
+                   <input
+                     type="password"
+                     value={apiKey}
+                     onChange={(e) => setApiKey(e.target.value)}
+                     placeholder="Sua API Key do Evolution"
+                     className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm font-bold focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                   />
+                 </div>
+               </div>
+             )}
+
+             <div className="space-y-4 mb-6">
+               <div>
+                 <label className="block text-xs font-black text-slate-600 dark:text-slate-300 uppercase tracking-wider mb-2">
+                   Nome da Instância
+                 </label>
+                 <input
+                   type="text"
+                   value={instanceName}
+                   onChange={(e) => setInstanceName(e.target.value)}
+                   placeholder="minha-clinica-whatsapp"
+                   className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm font-bold focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                 />
+                 <p className="text-[10px] text-slate-400 mt-2 font-bold">
+                   Use apenas letras, números e hífens
+                 </p>
+               </div>
+             </div>
+
+             {qrCode && qrCode !== 'CONNECTED_ALREADY' && (
+               <div className="mb-6 p-6 bg-slate-50 dark:bg-slate-800 rounded-2xl text-center">
+                 <p className="text-xs font-black text-slate-600 dark:text-slate-300 uppercase tracking-wider mb-4">
+                   Escaneie o QR Code com seu WhatsApp
+                 </p>
+                 <div className="flex justify-center">
+                   <img 
+                     src={qrCode} 
+                     alt="QR Code WhatsApp" 
+                     className="w-64 h-64 rounded-2xl border-4 border-white dark:border-slate-700 shadow-xl"
+                   />
+                 </div>
+                 <p className="text-[10px] text-slate-400 mt-4 font-bold">
+                   Abra o WhatsApp → Configurações → Aparelhos conectados → Conectar um aparelho
+                 </p>
+                 <button
+                   onClick={fetchQr}
+                   className="mt-4 px-4 py-2 bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-xl text-xs font-black uppercase tracking-wider hover:bg-slate-300 dark:hover:bg-slate-600 transition-colors"
+                 >
+                   Atualizar QR Code
+                 </button>
+               </div>
+             )}
+
+             <div className="flex gap-3">
+               <button
+                 onClick={handleCreateInstance}
+                 disabled={isCreatingInstance || !instanceName.trim() || (needsConfig && (!apiUrl.trim() || !apiKey.trim()))}
+                 className="flex-1 px-6 py-3 bg-indigo-600 text-white rounded-xl font-black text-xs uppercase tracking-widest hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2"
+               >
+                 {isCreatingInstance ? (
+                   <>
+                     <Loader2 className={`w-4 h-4 ${prefersReducedMotion ? '' : 'animate-spin'}`} />
+                     Criando...
+                   </>
+                 ) : (
+                   <>
+                     <Plus className="w-4 h-4" />
+                     Criar e Conectar
+                   </>
+                 )}
+               </button>
+             </div>
+           </div>
+         </div>
+       )}
     </div>
   );
 };
