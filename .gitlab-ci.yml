@@ -52,8 +52,9 @@ build:backend:
     - ls -la node_modules/.bin/ 2>&1 || echo "node_modules/.bin nao existe ainda"
     - echo "Executando npm ci"
     - npm ci
-    - echo "Garantindo que typescript esteja instalado"
+    - echo "Garantindo que typescript e tipos estejam instalados"
     - npm install typescript --save-dev || true
+    - npm install @types/express @types/cors @types/bcryptjs @types/jsonwebtoken @types/swagger-jsdoc @types/swagger-ui-express --save-dev || true
     - echo "DEBUG - Verificando apos npm ci"
     - pwd
     - ls -la node_modules/.bin/ | head -20 || echo "Erro ao listar node_modules/.bin"
