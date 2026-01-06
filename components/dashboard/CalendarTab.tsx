@@ -978,4 +978,3 @@ const CalendarTab: React.FC = () => {
 };
 
 export default CalendarTab;
-export default CalendarTab;
