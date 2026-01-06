@@ -18,6 +18,9 @@ cache:
 test:backend:
   stage: test
   image: node:${NODE_VERSION}
+  variables:
+    # DATABASE_URL temporária para Prisma generate (não precisa ser válida)
+    DATABASE_URL: "postgresql://user:password@localhost:5432/db?schema=public"
   before_script:
     - cd backend
     - npm ci
@@ -39,6 +42,9 @@ test:backend:
 build:backend:
   stage: build
   image: node:${NODE_VERSION}
+  variables:
+    # DATABASE_URL temporária para Prisma generate (não precisa ser válida)
+    DATABASE_URL: "postgresql://user:password@localhost:5432/db?schema=public"
   before_script:
     - cd backend
     - npm ci
