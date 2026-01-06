@@ -47,20 +47,20 @@ build:backend:
     DATABASE_URL: "postgresql://user:password@localhost:5432/db?schema=public"
   before_script:
     - cd backend
-    - echo "=== DEBUG: Verificando antes do npm ci ==="
+    - echo "DEBUG - Verificando antes do npm ci"
     - pwd
     - ls -la node_modules/.bin/ 2>&1 || echo "node_modules/.bin nao existe ainda"
-    - echo "=== Executando npm ci ==="
+    - echo "Executando npm ci"
     - npm ci
-    - echo "=== DEBUG: Verificando apos npm ci ==="
+    - echo "DEBUG - Verificando apos npm ci"
     - pwd
     - ls -la node_modules/.bin/ | head -20 || echo "Erro ao listar node_modules/.bin"
-    - test -f ./node_modules/.bin/tsc && echo "OK: tsc encontrado em ./node_modules/.bin/tsc" || echo "ERRO: tsc NAO encontrado em ./node_modules/.bin/tsc"
-    - test -f node_modules/.bin/tsc && echo "OK: tsc encontrado em node_modules/.bin/tsc" || echo "ERRO: tsc NAO encontrado em node_modules/.bin/tsc"
+    - test -f ./node_modules/.bin/tsc && echo "OK tsc encontrado" || echo "ERRO tsc NAO encontrado"
+    - test -f node_modules/.bin/tsc && echo "OK tsc encontrado sem ./" || echo "ERRO tsc NAO encontrado sem ./"
     - which tsc || echo "tsc nao esta no PATH"
-    - npm list typescript || echo "typescript nao encontrado no npm list"
-    - echo "PATH: $PATH"
-    - echo "=== Fim do DEBUG ==="
+    - npm list typescript || echo "typescript nao encontrado"
+    - echo "PATH=$PATH"
+    - echo "Fim do DEBUG"
   script:
     - npm run build
   artifacts:
