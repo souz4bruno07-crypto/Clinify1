@@ -47,7 +47,20 @@ build:backend:
     DATABASE_URL: "postgresql://user:password@localhost:5432/db?schema=public"
   before_script:
     - cd backend
+    - echo "=== DEBUG: Verificando antes do npm ci ==="
+    - pwd
+    - ls -la node_modules/.bin/ 2>&1 || echo "node_modules/.bin não existe ainda"
+    - echo "=== Executando npm ci ==="
     - npm ci
+    - echo "=== DEBUG: Verificando após npm ci ==="
+    - pwd
+    - ls -la node_modules/.bin/ | head -20 || echo "Erro ao listar node_modules/.bin"
+    - test -f ./node_modules/.bin/tsc && echo "✅ tsc encontrado em ./node_modules/.bin/tsc" || echo "❌ tsc NÃO encontrado em ./node_modules/.bin/tsc"
+    - test -f node_modules/.bin/tsc && echo "✅ tsc encontrado em node_modules/.bin/tsc" || echo "❌ tsc NÃO encontrado em node_modules/.bin/tsc"
+    - which tsc || echo "tsc não está no PATH"
+    - npm list typescript || echo "typescript não encontrado no npm list"
+    - echo "PATH: $PATH"
+    - echo "=== Fim do DEBUG ==="
   script:
     - npm run build
   artifacts:
