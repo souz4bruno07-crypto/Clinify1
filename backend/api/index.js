@@ -9,13 +9,16 @@ console.log('VERCEL:', process.env.VERCEL);
 
 // Importação estática - se o dist/ não foi gerado, isso vai falhar
 // e o erro será mostrado nos logs do Vercel
-import app from '../dist/index.js';
+// O Vercel executa o build antes de rodar as funções, então dist/index.js deve existir
+import appModule from '../dist/index.js';
 
 // Verificar se o app foi exportado corretamente
-if (!app) {
-  throw new Error('App não foi exportado corretamente do dist/index.js. Verifique se o build foi executado e se o arquivo dist/index.js existe.');
+if (!appModule || !appModule.default) {
+  throw new Error('App não foi exportado corretamente do dist/index.js. Verifique se o arquivo exporta default app e se o build foi executado (npm run build na pasta backend).');
 }
 
+const app = appModule.default;
 console.log('✅ App carregado com sucesso');
+
 export default app;
 
